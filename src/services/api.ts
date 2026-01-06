@@ -47,6 +47,9 @@ export interface ScreeningResult {
   concerns: string[];
   interviewQuestions: string[];
   experienceYears: number;
+  // Military-grade accuracy fields
+  skillMatchPercent?: number | null;
+  educationMatch?: boolean | null;
   rawResponse?: string;
 }
 

@@ -10,37 +10,59 @@ interface ModelInfo {
   category?: string;
 }
 
-// REAL OpenRouter model IDs - verified working
+// LATEST OpenRouter model IDs - January 2026
 const RECOMMENDED_MODELS = [
-  'anthropic/claude-3-5-sonnet-20241022',
-  'anthropic/claude-3-opus-20240229',
-  'anthropic/claude-3-haiku-20240307',
-  'openai/gpt-4o',
-  'openai/gpt-4-turbo',
-  'openai/gpt-4o-mini',
-  'google/gemini-1.5-pro',
-  'google/gemini-1.5-flash',
+  // === FRONTIER MODELS (Jan 2026) ===
+  // GPT-5.2 Series (OpenAI - Dec 2025)
+  'openai/gpt-5.2-pro-20251211',
+  'openai/gpt-5.2-20251211',
+  'openai/gpt-5.2-chat-20251211',
+  // Claude 4.5 Series (Anthropic - Nov 2025)
+  'anthropic/claude-opus-4.5-20251124',
+  'anthropic/claude-4.5-haiku-20251001',
+  // Gemini 3 Series (Google - Dec 2025)
+  'google/gemini-3-pro-preview-20251117',
+  'google/gemini-3-flash-preview-20251217',
+  // === BUDGET-FRIENDLY MODELS ===
+  // DeepSeek V3.2 (Dec 2025) - Very affordable!
+  'deepseek/deepseek-v3.2-20251201',
+  'deepseek/deepseek-v3.2-speciale-20251201',
+  // GLM 4.7 (Dec 2025) - Z.AI latest
+  'z-ai/glm-4.7-20251222',
+  // === VISION/OCR MODELS ===
+  // Qwen3-VL (Best for PDF OCR - $0.12/M input)
+  'qwen/qwen3-vl-235b-a22b-instruct',
 ];
 
-// Fallback models with REAL IDs
+// Fallback models with LATEST IDs (Jan 2026)
 const FALLBACK_MODELS: ModelInfo[] = [
-  { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true, category: 'Anthropic', description: 'Best for complex analysis' },
-  { id: 'anthropic/claude-3-opus-20240229', name: 'Claude 3 Opus', recommended: true, category: 'Anthropic', description: 'Most capable Claude model' },
-  { id: 'anthropic/claude-3-haiku-20240307', name: 'Claude 3 Haiku', recommended: true, category: 'Anthropic', description: 'Fast and efficient' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true, category: 'OpenAI', description: 'Latest GPT-4 model' },
-  { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', recommended: true, category: 'OpenAI', description: 'Fast GPT-4' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', recommended: true, category: 'OpenAI', description: 'Cost-effective' },
-  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', recommended: true, category: 'Google', description: 'Google\'s best model' },
-  { id: 'google/gemini-1.5-flash', name: 'Gemini 1.5 Flash', recommended: true, category: 'Google', description: 'Fast Gemini' },
+  // === FRONTIER MODELS ===
+  // GPT-5.2 (OpenAI - Dec 2025)
+  { id: 'openai/gpt-5.2-pro-20251211', name: 'GPT-5.2 Pro', recommended: true, category: 'OpenAI', description: 'Most advanced - 400K context' },
+  { id: 'openai/gpt-5.2-20251211', name: 'GPT-5.2', recommended: true, category: 'OpenAI', description: 'Frontier model with adaptive reasoning' },
+  { id: 'openai/gpt-5.2-chat-20251211', name: 'GPT-5.2 Chat', recommended: true, category: 'OpenAI', description: 'Fast chat variant' },
+  // Claude 4.5 (Anthropic - Nov 2025)
+  { id: 'anthropic/claude-opus-4.5-20251124', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic', description: 'Best for complex analysis - 80.9% coding accuracy' },
+  { id: 'anthropic/claude-4.5-haiku-20251001', name: 'Claude 4.5 Haiku', recommended: true, category: 'Anthropic', description: 'Fast & efficient' },
+  // Gemini 3 (Google - Dec 2025)
+  { id: 'google/gemini-3-pro-preview-20251117', name: 'Gemini 3 Pro', recommended: true, category: 'Google', description: 'Flagship - 1M token context' },
+  { id: 'google/gemini-3-flash-preview-20251217', name: 'Gemini 3 Flash', recommended: true, category: 'Google', description: 'High-speed variant' },
+  // === BUDGET-FRIENDLY MODELS ===
+  // DeepSeek V3.2 (Dec 2025)
+  { id: 'deepseek/deepseek-v3.2-20251201', name: 'DeepSeek V3.2', recommended: true, category: 'DeepSeek', description: 'Best value - sparse attention' },
+  { id: 'deepseek/deepseek-v3.2-speciale-20251201', name: 'DeepSeek V3.2 Speciale', recommended: true, category: 'DeepSeek', description: 'High-compute variant' },
+  // GLM 4.7 (Z.AI - Dec 2025)
+  { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true, category: 'GLM', description: 'Latest Z.AI - enhanced programming' },
 ];
 
 function getCategoryFromId(id: string): string {
-  if (id.startsWith('anthropic/')) return 'Anthropic';
   if (id.startsWith('openai/')) return 'OpenAI';
+  if (id.startsWith('anthropic/')) return 'Anthropic';
   if (id.startsWith('google/')) return 'Google';
+  if (id.startsWith('deepseek/') || id.includes('deepseek')) return 'DeepSeek';
+  if (id.startsWith('z-ai/') || id.includes('glm')) return 'GLM';
   if (id.startsWith('meta-llama/') || id.startsWith('meta/')) return 'Meta';
   if (id.startsWith('mistralai/')) return 'Mistral';
-  if (id.startsWith('deepseek/') || id.includes('deepseek')) return 'DeepSeek';
   if (id.startsWith('bytedance/')) return 'ByteDance';
   if (id.startsWith('nvidia/')) return 'NVIDIA';
   if (id.startsWith('cohere/')) return 'Cohere';
@@ -104,7 +126,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         if (a.recommended && !b.recommended) return -1;
         if (!a.recommended && b.recommended) return 1;
         // Then by category
-        const categoryOrder = ['Anthropic', 'OpenAI', 'Google', 'Meta', 'Mistral'];
+        const categoryOrder = ['OpenAI', 'Anthropic', 'Google', 'DeepSeek', 'GLM', 'Meta', 'Mistral'];
         const aIdx = categoryOrder.indexOf(a.category || 'Other');
         const bIdx = categoryOrder.indexOf(b.category || 'Other');
         if (aIdx !== bIdx) return aIdx - bIdx;

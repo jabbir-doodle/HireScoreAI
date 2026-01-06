@@ -24,8 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { jobDescription, cvContent, model } = req.body;
 
-    // Use a REAL OpenRouter model ID - claude-3.5-sonnet is the best for this
-    const selectedModel = model || 'anthropic/claude-3-5-sonnet-20241022';
+    // Default to GLM 4.7 (cheapest) - user can select premium models if needed
+    const selectedModel = model || 'z-ai/glm-4.7-20251222';
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
@@ -46,41 +46,83 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cvLength: cvContent.length,
     });
 
-    const prompt = `You are an expert HR recruiter and talent acquisition specialist. Your task is to analyze how well a candidate matches a job description.
+    const prompt = `You are a SENIOR HR DIRECTOR with 20+ years of talent acquisition experience. Your analysis must be PRECISE, OBJECTIVE, and ACTIONABLE.
 
-=== JOB DESCRIPTION ===
+══════════════════════════════════════════════════════════════
+                        JOB REQUIREMENTS
+══════════════════════════════════════════════════════════════
 ${jobDescription}
 
-=== CANDIDATE CV/RESUME ===
+══════════════════════════════════════════════════════════════
+                      CANDIDATE CV/RESUME
+══════════════════════════════════════════════════════════════
 ${cvContent}
 
-=== YOUR TASK ===
-Analyze the candidate's fit for this position. Consider:
-1. Technical skills match
-2. Experience level and relevance
-3. Education and certifications
-4. Cultural indicators
-5. Red flags or concerns
+══════════════════════════════════════════════════════════════
+                    MILITARY-GRADE ANALYSIS
+══════════════════════════════════════════════════════════════
 
-Provide your analysis as a JSON object with this EXACT structure:
+STEP 1 - EXTRACT REQUIREMENTS (from job description):
+- List ALL required skills mentioned
+- List ALL preferred/nice-to-have skills
+- Note minimum experience required
+- Note education requirements
+
+STEP 2 - CROSS-CHECK CANDIDATE (from CV):
+- For EACH required skill, verify if candidate has it (with evidence)
+- Calculate years of RELEVANT experience (not total career)
+- Verify education matches requirements
+- Check for career progression and stability
+
+STEP 3 - SCORING MATRIX (be STRICT):
+┌─────────────────────────────────────┬────────┐
+│ Criteria                            │ Weight │
+├─────────────────────────────────────┼────────┤
+│ Required Skills Match               │ 40%    │
+│ Relevant Experience (years + depth) │ 25%    │
+│ Education & Certifications          │ 15%    │
+│ Career Progression & Stability      │ 10%    │
+│ Culture Fit Indicators              │ 10%    │
+└─────────────────────────────────────┴────────┘
+
+STEP 4 - RED FLAG CHECK:
+- Employment gaps > 6 months
+- Job hopping (< 1 year at multiple roles)
+- Overqualified (may leave quickly)
+- Underqualified for seniority level
+- Missing critical certifications
+
+STEP 5 - OUTPUT (JSON only):
 {
-  "score": <number from 0 to 100>,
-  "recommendation": "<one of: interview, maybe, pass>",
-  "summary": "<2-3 sentence executive summary of the candidate's fit>",
-  "matchedSkills": ["<skill that matches job requirement>", ...],
-  "missingSkills": ["<required skill candidate lacks>", ...],
-  "concerns": ["<potential red flag or concern>", ...],
-  "interviewQuestions": ["<suggested interview question>", "<another question>", "<third question>"],
-  "experienceYears": <estimated total years of relevant experience as a number>
+  "score": <0-100 based on weighted matrix above>,
+  "recommendation": "<interview|maybe|pass>",
+  "summary": "<3 sentences: 1) Overall fit 2) Key strength 3) Main concern>",
+  "matchedSkills": ["<skill from JD that candidate HAS with proof>", ...],
+  "missingSkills": ["<REQUIRED skill from JD that candidate LACKS>", ...],
+  "concerns": ["<specific red flag with evidence>", ...],
+  "interviewQuestions": [
+    "<question to verify a claimed skill>",
+    "<question about a potential concern>",
+    "<behavioral question for culture fit>"
+  ],
+  "experienceYears": <RELEVANT experience only, not total>,
+  "skillMatchPercent": <percentage of required skills matched>,
+  "educationMatch": <true if meets minimum education requirement, false otherwise>
 }
 
-IMPORTANT:
-- Score 80-100: Strong match, recommend interview
-- Score 60-79: Moderate match, worth considering
-- Score 40-59: Weak match, likely not suitable
-- Score 0-39: Poor match, do not recommend
-- Be objective and factual
-- Return ONLY the JSON object, no other text`;
+SCORING GUIDE (BE STRICT - HR budgets depend on accuracy):
+- 85-100: EXCELLENT - Schedule interview immediately
+- 70-84: GOOD - Worth interviewing, minor gaps
+- 55-69: MAYBE - Consider if talent pool is limited
+- 40-54: WEAK - Significant gaps, likely not suitable
+- 0-39: PASS - Does not meet minimum requirements
+
+CRITICAL RULES:
+1. NEVER inflate scores - HR decisions have real consequences
+2. If a REQUIRED skill is missing, cap score at 70 maximum
+3. If 2+ REQUIRED skills missing, cap score at 50 maximum
+4. Evidence-based only - don't assume skills not mentioned
+5. Return ONLY the JSON object, no other text`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -112,8 +154,8 @@ IMPORTANT:
       console.error('OpenRouter API error:', response.status, errorText);
 
       // Try fallback model if primary fails
-      if (selectedModel.includes('claude')) {
-        console.log('Trying fallback model: openai/gpt-4o');
+      if (selectedModel.includes('claude') || selectedModel.includes('anthropic')) {
+        console.log('Trying fallback model: openai/gpt-5.2-20251211');
         const fallbackResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -123,7 +165,7 @@ IMPORTANT:
             'X-Title': 'HireScore AI',
           },
           body: JSON.stringify({
-            model: 'openai/gpt-4o',
+            model: 'openai/gpt-5.2-20251211',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.2,
             max_tokens: 2000,
@@ -201,6 +243,9 @@ function processAIResponse(data: any, res: VercelResponse) {
         concerns: Array.isArray(result.concerns) ? result.concerns : [],
         interviewQuestions: Array.isArray(result.interviewQuestions) ? result.interviewQuestions : [],
         experienceYears: typeof result.experienceYears === 'number' ? result.experienceYears : 0,
+        // New military-grade fields
+        skillMatchPercent: typeof result.skillMatchPercent === 'number' ? result.skillMatchPercent : null,
+        educationMatch: typeof result.educationMatch === 'boolean' ? result.educationMatch : null,
       },
       usage: data.usage,
     });

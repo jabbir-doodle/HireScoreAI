@@ -83,21 +83,40 @@ interface ModelInfo {
   category?: string;
 }
 
+// OpenRouter API model response type
+interface OpenRouterModel {
+  id: string;
+  name: string;
+  description?: string;
+  context_length?: number;
+  pricing?: { prompt?: string; completion?: string };
+  architecture?: { output_modalities?: string[] };
+}
+
 // Cache for models (refresh every 10 minutes)
 let modelsCache: ModelInfo[] = [];
 let modelsCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// Curated list of REAL recommended models for CV screening
+// LATEST OpenRouter models - January 2026
 const RECOMMENDED_MODELS = [
-  'anthropic/claude-3-5-sonnet-20241022',
-  'anthropic/claude-3-opus-20240229',
-  'anthropic/claude-3-haiku-20240307',
-  'openai/gpt-4o',
-  'openai/gpt-4-turbo',
-  'openai/gpt-4o-mini',
-  'google/gemini-1.5-pro',
-  'google/gemini-1.5-flash',
+  // === FRONTIER MODELS (Jan 2026) ===
+  // GPT-5.2 Series (OpenAI - Dec 2025)
+  'openai/gpt-5.2-pro-20251211',
+  'openai/gpt-5.2-20251211',
+  'openai/gpt-5.2-chat-20251211',
+  // Claude 4.5 Series (Anthropic - Nov 2025)
+  'anthropic/claude-opus-4.5-20251124',
+  'anthropic/claude-4.5-haiku-20251001',
+  // Gemini 3 Series (Google - Dec 2025)
+  'google/gemini-3-pro-preview-20251117',
+  'google/gemini-3-flash-preview-20251217',
+  // === BUDGET-FRIENDLY MODELS ===
+  // DeepSeek V3.2 (Dec 2025)
+  'deepseek/deepseek-v3.2-20251201',
+  'deepseek/deepseek-v3.2-speciale-20251201',
+  // GLM 4.7 (Z.AI - Dec 2025)
+  'z-ai/glm-4.7-20251222',
 ];
 
 async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
@@ -115,15 +134,15 @@ async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
     const data = await response.json();
 
     // Filter and transform models
-    const models: ModelInfo[] = data.data
-      .filter((m: any) => {
+    const models: ModelInfo[] = (data.data as OpenRouterModel[])
+      .filter((m: OpenRouterModel) => {
         // Include models that support text generation
         const hasTextOutput = m.architecture?.output_modalities?.includes('text');
         // Exclude deprecated or very old models
         const isRecent = !m.id.includes('2023') && !m.id.includes('deprecated');
         return hasTextOutput && isRecent;
       })
-      .map((m: any) => ({
+      .map((m: OpenRouterModel) => ({
         id: m.id,
         name: m.name,
         description: m.description?.substring(0, 200),
@@ -145,23 +164,26 @@ async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
     return models;
   } catch (error) {
     console.error('Error fetching models from OpenRouter:', error);
-    // Return fallback models
+    // Return fallback models - LATEST Jan 2026
     return [
-      { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true, category: 'Anthropic' },
-      { id: 'anthropic/claude-3-opus-20240229', name: 'Claude 3 Opus', recommended: true, category: 'Anthropic' },
-      { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true, category: 'OpenAI' },
-      { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', recommended: true, category: 'Google' },
+      { id: 'openai/gpt-5.2-pro-20251211', name: 'GPT-5.2 Pro', recommended: true, category: 'OpenAI' },
+      { id: 'openai/gpt-5.2-20251211', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
+      { id: 'anthropic/claude-opus-4.5-20251124', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
+      { id: 'google/gemini-3-pro-preview-20251117', name: 'Gemini 3 Pro', recommended: true, category: 'Google' },
+      { id: 'deepseek/deepseek-v3.2-20251201', name: 'DeepSeek V3.2', recommended: true, category: 'DeepSeek' },
+      { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true, category: 'GLM' },
     ];
   }
 }
 
 function getCategoryFromId(id: string): string {
-  if (id.startsWith('anthropic/')) return 'Anthropic';
   if (id.startsWith('openai/')) return 'OpenAI';
+  if (id.startsWith('anthropic/')) return 'Anthropic';
   if (id.startsWith('google/')) return 'Google';
+  if (id.startsWith('deepseek/') || id.includes('deepseek')) return 'DeepSeek';
+  if (id.startsWith('z-ai/') || id.includes('glm')) return 'GLM';
   if (id.startsWith('meta-llama/') || id.startsWith('meta/')) return 'Meta';
   if (id.startsWith('mistralai/')) return 'Mistral';
-  if (id.startsWith('deepseek/') || id.includes('deepseek')) return 'DeepSeek';
   if (id.startsWith('bytedance/')) return 'ByteDance';
   if (id.startsWith('nvidia/')) return 'NVIDIA';
   if (id.startsWith('cohere/')) return 'Cohere';
@@ -205,8 +227,9 @@ app.get('/api/config', async (_req, res) => {
     res.json({
       provider: 'openrouter',
       models: quickModels.length > 0 ? quickModels : [
-        { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true },
-        { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true },
+        { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true },
+        { id: 'openai/gpt-5.2-20251211', name: 'GPT-5.2', recommended: true },
+        { id: 'anthropic/claude-opus-4.5-20251124', name: 'Claude Opus 4.5', recommended: true },
       ],
       features: {
         screening: true,
@@ -220,7 +243,7 @@ app.get('/api/config', async (_req, res) => {
     res.json({
       provider: 'openrouter',
       models: [
-        { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', recommended: true },
+        { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true },
       ],
       features: {
         screening: true,
@@ -305,7 +328,7 @@ app.post('/api/fetch-url', async (req, res) => {
 // Screen a single candidate
 app.post('/api/screen', async (req, res) => {
   try {
-    const { jobDescription, cvContent, model = 'anthropic/claude-3-5-sonnet-20241022' } = req.body;
+    const { jobDescription, cvContent, model = 'z-ai/glm-4.7-20251222' } = req.body;
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
@@ -313,29 +336,46 @@ app.post('/api/screen', async (req, res) => {
       });
     }
 
-    const prompt = `You are an expert HR recruiter screening CVs. Analyze this candidate.
+    const prompt = `You are a SENIOR HR DIRECTOR with 20+ years of talent acquisition experience. Your analysis must be PRECISE, OBJECTIVE, and ACTIONABLE.
 
-JOB DESCRIPTION:
+══════════════════════════════════════════════════════════════
+                        JOB REQUIREMENTS
+══════════════════════════════════════════════════════════════
 ${jobDescription}
 
-CANDIDATE CV:
+══════════════════════════════════════════════════════════════
+                      CANDIDATE CV/RESUME
+══════════════════════════════════════════════════════════════
 ${cvContent}
 
----
+══════════════════════════════════════════════════════════════
+                    MILITARY-GRADE ANALYSIS
+══════════════════════════════════════════════════════════════
 
-Provide your analysis in the following JSON format:
+STEP 1 - EXTRACT REQUIREMENTS: List ALL required and preferred skills from JD
+STEP 2 - CROSS-CHECK: Verify EACH skill against CV with evidence
+STEP 3 - SCORING (40% skills, 25% experience, 15% education, 10% progression, 10% culture)
+STEP 4 - RED FLAGS: Gaps, job hopping, over/under qualified
+
+OUTPUT (JSON only):
 {
-  "score": <number 0-100>,
+  "score": <0-100>,
   "recommendation": "<interview|maybe|pass>",
-  "summary": "<2-3 sentence summary>",
-  "matchedSkills": ["<skill1>", "<skill2>", ...],
-  "missingSkills": ["<skill1>", "<skill2>", ...],
-  "concerns": ["<concern1>", ...],
-  "interviewQuestions": ["<question1>", "<question2>", "<question3>"],
-  "experienceYears": <number>
+  "summary": "<3 sentences: fit, strength, concern>",
+  "matchedSkills": ["<skill with proof>", ...],
+  "missingSkills": ["<REQUIRED skill lacking>", ...],
+  "concerns": ["<red flag with evidence>", ...],
+  "interviewQuestions": ["<verify skill>", "<address concern>", "<culture fit>"],
+  "experienceYears": <RELEVANT years only>,
+  "skillMatchPercent": <% of required skills matched>,
+  "educationMatch": <true/false>
 }
 
-Be objective and thorough. Return ONLY valid JSON.`;
+STRICT RULES:
+- 1 missing required skill = max 70 score
+- 2+ missing required skills = max 50 score
+- Evidence-based only
+- Return ONLY JSON`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -386,7 +426,7 @@ Be objective and thorough. Return ONLY valid JSON.`;
         result,
         usage: data.usage,
       });
-    } catch (parseError) {
+    } catch {
       // If JSON parsing fails, return structured error
       res.json({
         success: true,
@@ -417,7 +457,7 @@ Be objective and thorough. Return ONLY valid JSON.`;
 // Batch screen multiple candidates
 app.post('/api/screen/batch', async (req, res) => {
   try {
-    const { jobDescription, candidates, model = 'anthropic/claude-3.5-sonnet' } = req.body;
+    const { jobDescription, candidates, model = 'z-ai/glm-4.7-20251222' } = req.body;
 
     if (!jobDescription || !candidates || !Array.isArray(candidates)) {
       return res.status(400).json({
@@ -523,6 +563,7 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Server error:', err);
   res.status(500).json({ error: 'Internal server error' });

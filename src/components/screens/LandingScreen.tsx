@@ -456,7 +456,7 @@ export function LandingScreen() {
                         <Brain style={{ width: 18, height: 18, color: colors.violet }} />
                         <span style={{ fontFamily: fonts.display, fontSize: '16px', fontWeight: fontWeights.bold, color: colors.violet }}>AI Powered</span>
                       </div>
-                      <div style={{ fontSize: '11px', color: colors.silver }}>Claude, GPT-5, Gemini</div>
+                      <div style={{ fontSize: '11px', color: colors.silver }}>50+ AI Models</div>
                     </motion.div>
                   </>
                 )}
@@ -703,7 +703,7 @@ export function LandingScreen() {
             gap: isMobile ? '12px' : '24px',
           }}>
             {[
-              { icon: Brain, title: 'Multi-AI Models', desc: 'Choose from Claude, GPT-5, Gemini, and more.', color: colors.violet },
+              { icon: Brain, title: 'Multi-AI Models', desc: 'Choose from 50+ AI models including latest 2026 releases.', color: colors.violet },
               { icon: Target, title: 'Precision Matching', desc: '0-100 score with skill-by-skill breakdown.', color: colors.cyan },
               { icon: Clock, title: '10x Faster', desc: 'Screen 1000 CVs in minutes, not days.', color: colors.amber },
               { icon: Shield, title: 'Enterprise Security', desc: 'SOC 2 compliant. Data never leaves your control.', color: colors.emerald },

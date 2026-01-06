@@ -442,7 +442,7 @@ export function JobScreen() {
                     <div style={{ flex: 1 }}>
                       <Input
                         label="Job Posting URL"
-                        placeholder="https://company.breezy.hr/p/job-id"
+                        placeholder="https://careers.company.com/jobs/123"
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
                         icon={<Link style={{ width: 16, height: 16 }} />}
@@ -543,7 +543,7 @@ export function JobScreen() {
               />
               <Input
                 label="Company"
-                placeholder="e.g., Doodle Labs"
+                placeholder="e.g., Acme Corp"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
               />

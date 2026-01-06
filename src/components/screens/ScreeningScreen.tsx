@@ -36,7 +36,7 @@ export function ScreeningScreen() {
 
   // Model selection state
   const [models, setModels] = useState<AIModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('anthropic/claude-sonnet-4.5');
+  const [selectedModel, setSelectedModel] = useState<string>('z-ai/glm-4.7-20251222');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
