@@ -82,18 +82,16 @@ export function LandingScreen() {
         }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px' }}>
-            <div style={{
-              width: isMobile ? '36px' : '48px',
-              height: isMobile ? '36px' : '48px',
-              borderRadius: '12px',
-              background: `linear-gradient(135deg, ${colors.cyan}, ${colors.violet})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(0, 240, 255, 0.3)',
-            }}>
-              <Zap style={{ width: isMobile ? 18 : 24, height: isMobile ? 18 : 24, color: colors.void }} />
-            </div>
+            <img
+              src="/logo.svg"
+              alt="HireScore AI"
+              style={{
+                width: isMobile ? '36px' : '48px',
+                height: isMobile ? '36px' : '48px',
+                borderRadius: '12px',
+                boxShadow: '0 0 20px rgba(0, 240, 255, 0.3)',
+              }}
+            />
             <div>
               <span style={{
                 fontFamily: fonts.display,
@@ -914,17 +912,15 @@ export function LandingScreen() {
           textAlign: isMobile ? 'center' : 'left',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              background: `linear-gradient(135deg, ${colors.cyan}, ${colors.violet})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Zap style={{ width: 18, height: 18, color: colors.void }} />
-            </div>
+            <img
+              src="/logo.svg"
+              alt="HireScore AI"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+              }}
+            />
             <div>
               <span style={{ fontFamily: fonts.display, fontWeight: fontWeights.bold, color: colors.snow, fontSize: '16px' }}>
                 HireScore<span style={{ color: colors.cyan }}>AI</span>
