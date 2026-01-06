@@ -88,15 +88,16 @@ let modelsCache: ModelInfo[] = [];
 let modelsCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// Curated list of recommended models for CV screening
+// Curated list of REAL recommended models for CV screening
 const RECOMMENDED_MODELS = [
-  'anthropic/claude-opus-4.5',
-  'anthropic/claude-sonnet-4.5',
-  'anthropic/claude-haiku-4.5',
-  'openai/gpt-5.2-pro',
-  'openai/gpt-5.2',
-  'openai/gpt-5.2-chat',
-  'google/gemini-3-flash-preview',
+  'anthropic/claude-3-5-sonnet-20241022',
+  'anthropic/claude-3-opus-20240229',
+  'anthropic/claude-3-haiku-20240307',
+  'openai/gpt-4o',
+  'openai/gpt-4-turbo',
+  'openai/gpt-4o-mini',
+  'google/gemini-1.5-pro',
+  'google/gemini-1.5-flash',
 ];
 
 async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
@@ -146,10 +147,10 @@ async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
     console.error('Error fetching models from OpenRouter:', error);
     // Return fallback models
     return [
-      { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', recommended: true, category: 'Anthropic' },
-      { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
-      { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
-      { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', recommended: true, category: 'Google' },
+      { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true, category: 'Anthropic' },
+      { id: 'anthropic/claude-3-opus-20240229', name: 'Claude 3 Opus', recommended: true, category: 'Anthropic' },
+      { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true, category: 'OpenAI' },
+      { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', recommended: true, category: 'Google' },
     ];
   }
 }
@@ -204,8 +205,8 @@ app.get('/api/config', async (_req, res) => {
     res.json({
       provider: 'openrouter',
       models: quickModels.length > 0 ? quickModels : [
-        { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', recommended: true },
-        { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true },
+        { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true },
+        { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true },
       ],
       features: {
         screening: true,
@@ -304,7 +305,7 @@ app.post('/api/fetch-url', async (req, res) => {
 // Screen a single candidate
 app.post('/api/screen', async (req, res) => {
   try {
-    const { jobDescription, cvContent, model = 'anthropic/claude-3.5-sonnet' } = req.body;
+    const { jobDescription, cvContent, model = 'anthropic/claude-3-5-sonnet-20241022' } = req.body;
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({

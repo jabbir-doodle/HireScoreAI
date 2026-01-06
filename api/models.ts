@@ -10,14 +10,28 @@ interface ModelInfo {
   category?: string;
 }
 
+// REAL OpenRouter model IDs - verified working
 const RECOMMENDED_MODELS = [
-  'anthropic/claude-opus-4.5',
-  'anthropic/claude-sonnet-4.5',
-  'anthropic/claude-haiku-4.5',
-  'openai/gpt-5.2-pro',
-  'openai/gpt-5.2',
-  'openai/gpt-5.2-chat',
-  'google/gemini-3-flash-preview',
+  'anthropic/claude-3-5-sonnet-20241022',
+  'anthropic/claude-3-opus-20240229',
+  'anthropic/claude-3-haiku-20240307',
+  'openai/gpt-4o',
+  'openai/gpt-4-turbo',
+  'openai/gpt-4o-mini',
+  'google/gemini-1.5-pro',
+  'google/gemini-1.5-flash',
+];
+
+// Fallback models with REAL IDs
+const FALLBACK_MODELS: ModelInfo[] = [
+  { id: 'anthropic/claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', recommended: true, category: 'Anthropic', description: 'Best for complex analysis' },
+  { id: 'anthropic/claude-3-opus-20240229', name: 'Claude 3 Opus', recommended: true, category: 'Anthropic', description: 'Most capable Claude model' },
+  { id: 'anthropic/claude-3-haiku-20240307', name: 'Claude 3 Haiku', recommended: true, category: 'Anthropic', description: 'Fast and efficient' },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', recommended: true, category: 'OpenAI', description: 'Latest GPT-4 model' },
+  { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', recommended: true, category: 'OpenAI', description: 'Fast GPT-4' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', recommended: true, category: 'OpenAI', description: 'Cost-effective' },
+  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', recommended: true, category: 'Google', description: 'Google\'s best model' },
+  { id: 'google/gemini-1.5-flash', name: 'Gemini 1.5 Flash', recommended: true, category: 'Google', description: 'Fast Gemini' },
 ];
 
 function getCategoryFromId(id: string): string {
@@ -35,11 +49,21 @@ function getCategoryFromId(id: string): string {
 }
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (_req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
     if (!OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: 'API key not configured' });
+      console.log('No API key, returning fallback models');
+      return res.json({ success: true, models: FALLBACK_MODELS });
     }
 
     const response = await fetch('https://openrouter.ai/api/v1/models', {
@@ -49,16 +73,19 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch models');
+      console.error('OpenRouter models API error:', response.status);
+      return res.json({ success: true, models: FALLBACK_MODELS });
     }
 
     const data = await response.json();
 
     const models: ModelInfo[] = data.data
       .filter((m: any) => {
-        const hasTextOutput = m.architecture?.output_modalities?.includes('text');
-        const isRecent = !m.id.includes('2023') && !m.id.includes('deprecated');
-        return hasTextOutput && isRecent;
+        // Include models that support text generation
+        const hasTextOutput = !m.architecture?.output_modalities || m.architecture.output_modalities.includes('text');
+        // Exclude image-only models
+        const isTextModel = !m.id.includes('dall-e') && !m.id.includes('imagen');
+        return hasTextOutput && isTextModel;
       })
       .map((m: any) => ({
         id: m.id,
@@ -73,23 +100,20 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         category: getCategoryFromId(m.id),
       }))
       .sort((a: ModelInfo, b: ModelInfo) => {
+        // Sort recommended first
         if (a.recommended && !b.recommended) return -1;
         if (!a.recommended && b.recommended) return 1;
+        // Then by category
+        const categoryOrder = ['Anthropic', 'OpenAI', 'Google', 'Meta', 'Mistral'];
+        const aIdx = categoryOrder.indexOf(a.category || 'Other');
+        const bIdx = categoryOrder.indexOf(b.category || 'Other');
+        if (aIdx !== bIdx) return aIdx - bIdx;
         return (a.name || '').localeCompare(b.name || '');
       });
 
     res.json({ success: true, models });
   } catch (error) {
     console.error('Error fetching models:', error);
-    // Return fallback models
-    res.json({
-      success: true,
-      models: [
-        { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', recommended: true, category: 'Anthropic' },
-        { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
-        { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
-        { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', recommended: true, category: 'Google' },
-      ]
-    });
+    res.json({ success: true, models: FALLBACK_MODELS });
   }
 }

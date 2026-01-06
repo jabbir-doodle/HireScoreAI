@@ -210,21 +210,102 @@ export async function screenBatch(
 }
 
 /**
- * Read file content as text
+ * Parse PDF file on server
+ */
+export async function parsePdf(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const arrayBuffer = e.target?.result as ArrayBuffer;
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ''
+          )
+        );
+
+        const response = await fetch(`${API_BASE}/api/parse-pdf`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ base64 }),
+        });
+
+        if (!response.ok) {
+          throw new Error('PDF parsing failed');
+        }
+
+        const data = await response.json();
+        resolve(data.text);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * Read file content as text (handles PDF, DOC, TXT)
  */
 export async function readFileAsText(file: File): Promise<string> {
+  const ext = file.name.toLowerCase().split('.').pop();
+
+  // Handle PDF files
+  if (file.type === 'application/pdf' || ext === 'pdf') {
+    try {
+      const text = await parsePdf(file);
+      if (text && text.trim().length > 50) {
+        return text;
+      }
+      throw new Error('PDF text extraction returned empty content');
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      // Fallback: return file info for manual handling
+      return `[PDF File: ${file.name}]
+
+Unable to extract text automatically. Please copy and paste the CV content manually, or use a text-based format (TXT, DOC).
+
+File size: ${(file.size / 1024).toFixed(1)} KB`;
+    }
+  }
+
+  // Handle Word documents (basic extraction)
+  if (ext === 'doc' || ext === 'docx') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        // Basic text extraction from docx (XML-based)
+        if (ext === 'docx') {
+          // Try to extract text from docx XML
+          const text = content
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (text.length > 100) {
+            resolve(text);
+          } else {
+            resolve(`[Word Document: ${file.name}]\n\nPlease copy and paste the CV content manually for best results.`);
+          }
+        } else {
+          resolve(content);
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  // Handle text files
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => resolve(e.target?.result as string);
     reader.onerror = () => reject(new Error('Failed to read file'));
-
-    if (file.type === 'application/pdf') {
-      // For PDF files, we'd need a PDF parser
-      // For now, return a placeholder
-      resolve(`[PDF File: ${file.name}]\n\nPlease use a text-based CV format (TXT, DOC, DOCX) for best results.`);
-    } else {
-      reader.readAsText(file);
-    }
+    reader.readAsText(file);
   });
 }
 
@@ -240,6 +321,7 @@ export const api = {
   screenCandidate,
   screenBatch,
   readFileAsText,
+  parsePdf,
   baseUrl: API_BASE,
 };
 
