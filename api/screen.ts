@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { jobDescription, cvContent, model } = req.body;
 
     // Default to GLM 4.7 (cheapest) - user can select premium models if needed
-    const selectedModel = model || 'z-ai/glm-4.7-20251222';
+    const selectedModel = model || 'z-ai/glm-4.7';
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
@@ -155,7 +155,7 @@ CRITICAL RULES:
 
       // Try fallback model if primary fails
       if (selectedModel.includes('claude') || selectedModel.includes('anthropic')) {
-        console.log('Trying fallback model: openai/gpt-5.2-20251211');
+        console.log('Trying fallback model: openai/gpt-5.2');
         const fallbackResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -165,7 +165,7 @@ CRITICAL RULES:
             'X-Title': 'HireScore AI',
           },
           body: JSON.stringify({
-            model: 'openai/gpt-5.2-20251211',
+            model: 'openai/gpt-5.2',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.2,
             max_tokens: 2000,

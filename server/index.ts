@@ -98,25 +98,26 @@ let modelsCache: ModelInfo[] = [];
 let modelsCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// LATEST OpenRouter models - January 2026
+// REAL OpenRouter models - January 2026 (verified from API)
 const RECOMMENDED_MODELS = [
-  // === FRONTIER MODELS (Jan 2026) ===
-  // GPT-5.2 Series (OpenAI - Dec 2025)
-  'openai/gpt-5.2-pro-20251211',
-  'openai/gpt-5.2-20251211',
-  'openai/gpt-5.2-chat-20251211',
-  // Claude 4.5 Series (Anthropic - Nov 2025)
-  'anthropic/claude-opus-4.5-20251124',
-  'anthropic/claude-4.5-haiku-20251001',
-  // Gemini 3 Series (Google - Dec 2025)
-  'google/gemini-3-pro-preview-20251117',
-  'google/gemini-3-flash-preview-20251217',
-  // === BUDGET-FRIENDLY MODELS ===
-  // DeepSeek V3.2 (Dec 2025)
-  'deepseek/deepseek-v3.2-20251201',
-  'deepseek/deepseek-v3.2-speciale-20251201',
-  // GLM 4.7 (Z.AI - Dec 2025)
-  'z-ai/glm-4.7-20251222',
+  // GPT-5.2 Series
+  'openai/gpt-5.2-pro',
+  'openai/gpt-5.2',
+  'openai/gpt-5.2-chat',
+  // Claude 4.5 Series
+  'anthropic/claude-opus-4.5',
+  'anthropic/claude-haiku-4.5',
+  // Gemini 3 Series
+  'google/gemini-3-pro-preview',
+  'google/gemini-3-flash-preview',
+  // DeepSeek V3.2
+  'deepseek/deepseek-v3.2',
+  'deepseek/deepseek-v3.2-speciale',
+  // GLM 4.7 (Cheapest)
+  'z-ai/glm-4.7',
+  // Reasoning Models
+  'openai/o3-deep-research',
+  'openai/o4-mini-deep-research',
 ];
 
 async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
@@ -164,14 +165,16 @@ async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
     return models;
   } catch (error) {
     console.error('Error fetching models from OpenRouter:', error);
-    // Return fallback models - LATEST Jan 2026
+    // Return fallback models - REAL IDs from OpenRouter
     return [
-      { id: 'openai/gpt-5.2-pro-20251211', name: 'GPT-5.2 Pro', recommended: true, category: 'OpenAI' },
-      { id: 'openai/gpt-5.2-20251211', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
-      { id: 'anthropic/claude-opus-4.5-20251124', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
-      { id: 'google/gemini-3-pro-preview-20251117', name: 'Gemini 3 Pro', recommended: true, category: 'Google' },
-      { id: 'deepseek/deepseek-v3.2-20251201', name: 'DeepSeek V3.2', recommended: true, category: 'DeepSeek' },
-      { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true, category: 'GLM' },
+      { id: 'openai/gpt-5.2-pro', name: 'GPT-5.2 Pro', recommended: true, category: 'OpenAI' },
+      { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
+      { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
+      { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', recommended: true, category: 'Anthropic' },
+      { id: 'google/gemini-3-pro-preview', name: 'Gemini 3 Pro', recommended: true, category: 'Google' },
+      { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', recommended: true, category: 'Google' },
+      { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2', recommended: true, category: 'DeepSeek' },
+      { id: 'z-ai/glm-4.7', name: 'GLM 4.7 (Cheapest)', recommended: true, category: 'GLM' },
     ];
   }
 }
@@ -227,9 +230,9 @@ app.get('/api/config', async (_req, res) => {
     res.json({
       provider: 'openrouter',
       models: quickModels.length > 0 ? quickModels : [
-        { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true },
-        { id: 'openai/gpt-5.2-20251211', name: 'GPT-5.2', recommended: true },
-        { id: 'anthropic/claude-opus-4.5-20251124', name: 'Claude Opus 4.5', recommended: true },
+        { id: 'z-ai/glm-4.7', name: 'GLM 4.7 (Cheapest)', recommended: true },
+        { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true },
+        { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true },
       ],
       features: {
         screening: true,
@@ -243,7 +246,7 @@ app.get('/api/config', async (_req, res) => {
     res.json({
       provider: 'openrouter',
       models: [
-        { id: 'z-ai/glm-4.7-20251222', name: 'GLM 4.7', recommended: true },
+        { id: 'z-ai/glm-4.7', name: 'GLM 4.7', recommended: true },
       ],
       features: {
         screening: true,
@@ -328,7 +331,7 @@ app.post('/api/fetch-url', async (req, res) => {
 // Screen a single candidate
 app.post('/api/screen', async (req, res) => {
   try {
-    const { jobDescription, cvContent, model = 'z-ai/glm-4.7-20251222' } = req.body;
+    const { jobDescription, cvContent, model = 'z-ai/glm-4.7' } = req.body;
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
@@ -457,7 +460,7 @@ STRICT RULES:
 // Batch screen multiple candidates
 app.post('/api/screen/batch', async (req, res) => {
   try {
-    const { jobDescription, candidates, model = 'z-ai/glm-4.7-20251222' } = req.body;
+    const { jobDescription, candidates, model = 'z-ai/glm-4.7' } = req.body;
 
     if (!jobDescription || !candidates || !Array.isArray(candidates)) {
       return res.status(400).json({

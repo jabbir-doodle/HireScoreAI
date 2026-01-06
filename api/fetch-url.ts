@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // API Version - bump with each deployment
-const API_VERSION = '2.1.1';
+const API_VERSION = '2.2.0';
 
 /**
  * Enterprise-Grade URL Fetcher for Job Descriptions

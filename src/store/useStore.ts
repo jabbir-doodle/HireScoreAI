@@ -30,7 +30,7 @@ const ENCRYPTION_KEY = 'HireScoreAI_2026_Secure';
 const defaultAIConfig: AIConfig = {
   provider: 'openrouter',
   apiKey: '',
-  model: 'z-ai/glm-4.7-20251222',
+  model: 'z-ai/glm-4.7',
   encrypted: false,
 };
 
