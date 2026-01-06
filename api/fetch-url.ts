@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// API Version - bump with each deployment
+const API_VERSION = '2.1.0';
+
 /**
  * Enterprise-Grade URL Fetcher for Job Descriptions
  *
@@ -182,7 +185,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           source: 'mycareersfuture',
           parseMethod: 'mcf-api',
           url: trimmedUrl,
-          contentLength: mcfResult.content.length
+          contentLength: mcfResult.content.length,
+          apiVersion: API_VERSION
         });
       } else {
         return res.status(422).json({
@@ -429,7 +433,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source,
       parseMethod,
       url: trimmedUrl,
-      contentLength: content.length
+      contentLength: content.length,
+      apiVersion: API_VERSION
     });
 
   } catch (error) {
