@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // API Version - bump with each deployment
-const API_VERSION = '2.1.0';
+const API_VERSION = '2.1.1';
 
 /**
  * Enterprise-Grade URL Fetcher for Job Descriptions
@@ -857,10 +857,16 @@ function formatMCFJob(data: Record<string, unknown>): string {
     }
   }
 
-  // Job Status
-  const status = data.status as string | undefined;
-  if (status && status.toLowerCase() !== 'open') {
-    sections.push(`\nSTATUS: ${status} (This job may no longer be accepting applications)`);
+  // Job Status - handle both string and object formats
+  const statusRaw = data.status;
+  let statusStr = '';
+  if (typeof statusRaw === 'string') {
+    statusStr = statusRaw;
+  } else if (statusRaw && typeof statusRaw === 'object' && 'status' in statusRaw) {
+    statusStr = String((statusRaw as Record<string, unknown>).status);
+  }
+  if (statusStr && statusStr.toLowerCase() !== 'open') {
+    sections.push(`\nSTATUS: ${statusStr} (This job may no longer be accepting applications)`);
   }
 
   return sections.join('\n');

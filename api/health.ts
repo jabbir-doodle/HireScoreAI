@@ -6,13 +6,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  */
 
 // Bump this version with each deployment
-const API_VERSION = '2.1.0';
+const API_VERSION = '2.1.1';
 
 // Build timestamp (set at deployment time)
 const BUILD_TIME = new Date().toISOString();
 
 // Changelog for quick reference
 const CHANGELOG = {
+  '2.1.1': 'Fix MCF status field type handling',
   '2.1.0': 'MyCareersFuture API integration, enterprise security',
   '2.0.0': 'Enterprise URL fetcher with SSRF protection',
   '1.0.0': 'Initial release',
