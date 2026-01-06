@@ -169,6 +169,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ========================================
+    // Special Handlers for SPA Sites (API-based)
+    // ========================================
+
+    // MyCareersFuture.gov.sg - React SPA, use their public API
+    if (hostname.includes('mycareersfuture.gov.sg')) {
+      const mcfResult = await fetchMyCareersFutureAPI(trimmedUrl);
+      if (mcfResult.success) {
+        return res.json({
+          success: true,
+          content: mcfResult.content,
+          source: 'mycareersfuture',
+          parseMethod: 'mcf-api',
+          url: trimmedUrl,
+          contentLength: mcfResult.content.length
+        });
+      } else {
+        return res.status(422).json({
+          success: false,
+          error: mcfResult.error || 'Could not fetch job from MyCareersFuture',
+          hint: 'The job posting may have been removed or expired.',
+          source: 'mycareersfuture'
+        });
+      }
+    }
+
+    // ========================================
     // Fetch with Timeout
     // ========================================
 
@@ -662,6 +688,177 @@ function parseGeneric(html: string): string {
     .trim();
 
   return cleaned.substring(0, SECURITY_CONFIG.MAX_OUTPUT_LENGTH);
+}
+
+// ============================================
+// SPA Site API Handlers
+// ============================================
+
+/**
+ * MyCareersFuture.gov.sg API Handler
+ * MCF is a React SPA - we use their public API directly
+ * API: https://api.mycareersfuture.gov.sg/v2/jobs/{jobId}
+ */
+async function fetchMyCareersFutureAPI(url: string): Promise<{ success: boolean; content: string; error?: string }> {
+  try {
+    // Extract job ID from URL
+    // URL format: /job/{category}/{slug}-{jobId}
+    // Example: /job/design/senior-software-qa-engineer-doodle-labs-155f2182e6b7484759d653f9cb3e9773
+    const urlParts = url.split('/');
+    const lastPart = urlParts[urlParts.length - 1];
+
+    // Job ID is the last segment (UUID format: 32 hex chars)
+    const jobIdMatch = lastPart.match(/([a-f0-9]{32})$/i);
+    if (!jobIdMatch) {
+      return { success: false, content: '', error: 'Could not extract job ID from URL' };
+    }
+
+    const jobId = jobIdMatch[1];
+    const apiUrl = `https://api.mycareersfuture.gov.sg/v2/jobs/${jobId}`;
+
+    console.log(`[MCF] Fetching job from API: ${apiUrl}`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SECURITY_CONFIG.FETCH_TIMEOUT_MS);
+
+    const response = await fetch(apiUrl, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return { success: false, content: '', error: 'Job posting not found - it may have been removed or expired' };
+      }
+      return { success: false, content: '', error: `MCF API returned ${response.status}` };
+    }
+
+    const data = await response.json();
+
+    // Format the MCF job data
+    const content = formatMCFJob(data);
+
+    if (!content || content.length < 100) {
+      return { success: false, content: '', error: 'Job data was empty or incomplete' };
+    }
+
+    return { success: true, content };
+  } catch (error) {
+    console.error('[MCF] API error:', error);
+    if ((error as Error).name === 'AbortError') {
+      return { success: false, content: '', error: 'Request timeout - MCF API took too long' };
+    }
+    return { success: false, content: '', error: (error as Error).message };
+  }
+}
+
+/**
+ * Format MyCareersFuture job data into readable text
+ */
+function formatMCFJob(data: Record<string, unknown>): string {
+  const sections: string[] = [];
+
+  // Job Title
+  if (data.title) {
+    sections.push(`JOB TITLE: ${String(data.title)}`);
+  }
+
+  // Company
+  const company = data.postedCompany as Record<string, unknown> | undefined;
+  if (company?.name) {
+    sections.push(`COMPANY: ${String(company.name)}`);
+  }
+
+  // Location
+  const address = data.address as Record<string, unknown> | undefined;
+  if (address) {
+    const locationParts: string[] = [];
+    if (address.streetAddress) locationParts.push(String(address.streetAddress));
+    if (address.postalCode) locationParts.push(`Singapore ${address.postalCode}`);
+    if (address.district) locationParts.push(`(${String(address.district)})`);
+    if (locationParts.length > 0) {
+      sections.push(`LOCATION: ${locationParts.join(', ')}`);
+    } else {
+      sections.push('LOCATION: Singapore');
+    }
+  } else {
+    sections.push('LOCATION: Singapore');
+  }
+
+  // Employment Type
+  const employmentTypes = data.employmentTypes as string[] | undefined;
+  const positionLevels = data.positionLevels as string[] | undefined;
+  const metadata: string[] = [];
+
+  if (employmentTypes?.length) {
+    metadata.push(`Type: ${employmentTypes.join(', ')}`);
+  }
+  if (positionLevels?.length) {
+    metadata.push(`Level: ${positionLevels.join(', ')}`);
+  }
+  if (metadata.length > 0) {
+    sections.push(`EMPLOYMENT: ${metadata.join(' | ')}`);
+  }
+
+  // Salary
+  const salary = data.salary as Record<string, unknown> | undefined;
+  if (salary) {
+    const min = salary.minimum as Record<string, unknown> | undefined;
+    const max = salary.maximum as Record<string, unknown> | undefined;
+    const type = salary.type as Record<string, unknown> | undefined;
+
+    if (min?.amount || max?.amount) {
+      const minAmt = min?.amount ? `$${Number(min.amount).toLocaleString()}` : '';
+      const maxAmt = max?.amount ? `$${Number(max.amount).toLocaleString()}` : '';
+      const period = type?.salaryType ? ` ${String(type.salaryType).toLowerCase()}` : '';
+      const salaryStr = minAmt && maxAmt ? `${minAmt} - ${maxAmt}${period}` : `${minAmt || maxAmt}${period}`;
+      sections.push(`SALARY: ${salaryStr}`);
+    }
+  }
+
+  // Description
+  if (data.description) {
+    const desc = htmlToText(String(data.description));
+    if (desc.length > 50) {
+      sections.push(`\nJOB DESCRIPTION:\n${desc}`);
+    }
+  }
+
+  // Requirements
+  const requirements = data.minimumYearsExperience as number | undefined;
+  const skills = data.skills as Array<{ skill: string }> | undefined;
+
+  if (requirements || skills?.length) {
+    const reqParts: string[] = [];
+
+    if (requirements && requirements > 0) {
+      reqParts.push(`• Minimum ${requirements} years of experience required`);
+    }
+
+    if (skills?.length) {
+      const skillNames = skills.map(s => s.skill || s).filter(Boolean);
+      if (skillNames.length > 0) {
+        reqParts.push(`• Skills: ${skillNames.join(', ')}`);
+      }
+    }
+
+    if (reqParts.length > 0) {
+      sections.push(`\nREQUIREMENTS:\n${reqParts.join('\n')}`);
+    }
+  }
+
+  // Job Status
+  const status = data.status as string | undefined;
+  if (status && status.toLowerCase() !== 'open') {
+    sections.push(`\nSTATUS: ${status} (This job may no longer be accepting applications)`);
+  }
+
+  return sections.join('\n');
 }
 
 // ============================================
