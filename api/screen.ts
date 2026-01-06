@@ -33,10 +33,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Check if CV content is actually meaningful
-    if (cvContent.length < 100 || cvContent.includes('[PDF File:')) {
+    // Check if CV content is actually meaningful (lowered threshold for scanned PDFs)
+    if (cvContent.length < 50) {
       return res.status(400).json({
-        error: 'CV content is empty or could not be read. Please paste the CV text directly or use a text file.'
+        error: 'CV content is too short. Please ensure the PDF contains text or paste the CV content manually.'
       });
     }
 

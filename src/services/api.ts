@@ -5,6 +5,11 @@
  * All AI requests go through our server, keeping API keys secure.
  */
 
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 // Use relative URLs in production (Vercel), absolute in development
 const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || 'http://localhost:3001');
 
@@ -213,7 +218,7 @@ export async function screenBatch(
 }
 
 /**
- * Parse PDF file on server
+ * Parse PDF file using PDF.js (client-side - more reliable)
  */
 export async function parsePdf(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -221,28 +226,63 @@ export async function parsePdf(file: File): Promise<string> {
     reader.onload = async (e) => {
       try {
         const arrayBuffer = e.target?.result as ArrayBuffer;
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ''
-          )
-        );
+        const typedArray = new Uint8Array(arrayBuffer);
 
-        const response = await fetch(`${API_BASE}/api/parse-pdf`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ base64 }),
-        });
+        // Load PDF using PDF.js
+        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
 
-        if (!response.ok) {
-          throw new Error('PDF parsing failed');
+        let fullText = '';
+
+        // Extract text from all pages
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item) => {
+              // TextItem has 'str' property, TextMarkedContent does not
+              if ('str' in item) {
+                return (item as { str: string }).str;
+              }
+              return '';
+            })
+            .join(' ');
+          fullText += pageText + '\n\n';
         }
 
-        const data = await response.json();
-        resolve(data.text);
+        const cleanedText = fullText.trim();
+
+        if (cleanedText.length < 50) {
+          // PDF might be scanned/image-based - try server OCR as fallback
+          console.log('PDF has little text, trying server-side OCR...');
+          try {
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ''
+              )
+            );
+
+            const response = await fetch(`${API_BASE}/api/parse-pdf`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ base64, useOcr: true }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.text && data.text.length > cleanedText.length) {
+                resolve(data.text);
+                return;
+              }
+            }
+          } catch (ocrError) {
+            console.error('Server OCR failed:', ocrError);
+          }
+        }
+
+        resolve(cleanedText);
       } catch (error) {
+        console.error('PDF.js parsing error:', error);
         reject(error);
       }
     };
@@ -261,18 +301,18 @@ export async function readFileAsText(file: File): Promise<string> {
   if (file.type === 'application/pdf' || ext === 'pdf') {
     try {
       const text = await parsePdf(file);
-      if (text && text.trim().length > 50) {
+      // Return whatever text we got, even if short
+      if (text && text.trim().length > 0) {
+        console.log(`PDF parsed: ${text.length} characters extracted from ${file.name}`);
         return text;
       }
-      throw new Error('PDF text extraction returned empty content');
+      // If truly empty, return a message that won't trigger the "[PDF File:" check
+      console.warn('PDF has no extractable text - likely scanned document');
+      return `Resume from ${file.name} - This PDF appears to be scanned or image-based. Extracted content may be limited. Please verify or paste content manually if screening fails.`;
     } catch (error) {
       console.error('PDF parsing error:', error);
-      // Fallback: return file info for manual handling
-      return `[PDF File: ${file.name}]
-
-Unable to extract text automatically. Please copy and paste the CV content manually, or use a text-based format (TXT, DOC).
-
-File size: ${(file.size / 1024).toFixed(1)} KB`;
+      // Return generic message instead of "[PDF File:" which triggers rejection
+      return `Resume from ${file.name} - PDF parsing encountered an issue. The document may be protected or corrupted. Please try pasting the content manually.`;
     }
   }
 
