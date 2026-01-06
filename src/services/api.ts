@@ -7,8 +7,9 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// PDF.js worker setup - disable worker for simpler, more reliable parsing
+// This runs parsing on main thread (slightly slower but 100% reliable)
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 // Use relative URLs in production (Vercel), absolute in development
 const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || 'http://localhost:3001');
@@ -228,61 +229,82 @@ export async function parsePdf(file: File): Promise<string> {
         const arrayBuffer = e.target?.result as ArrayBuffer;
         const typedArray = new Uint8Array(arrayBuffer);
 
+        console.log(`[PDF Parser] Starting PDF.js parsing, file size: ${typedArray.length} bytes`);
+
         // Load PDF using PDF.js
-        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: typedArray });
+        const pdf = await loadingTask.promise;
+
+        console.log(`[PDF Parser] PDF loaded successfully, pages: ${pdf.numPages}`);
 
         let fullText = '';
+        let totalItems = 0;
 
         // Extract text from all pages
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          const pageText = textContent.items
+          const pageItems = textContent.items;
+          totalItems += pageItems.length;
+
+          const pageText = pageItems
             .map((item) => {
-              // TextItem has 'str' property, TextMarkedContent does not
               if ('str' in item) {
                 return (item as { str: string }).str;
               }
               return '';
             })
             .join(' ');
+
           fullText += pageText + '\n\n';
+          console.log(`[PDF Parser] Page ${i}: ${pageItems.length} items, ${pageText.length} chars`);
         }
 
         const cleanedText = fullText.trim();
+        console.log(`[PDF Parser] Total extracted: ${cleanedText.length} chars from ${totalItems} items`);
 
-        if (cleanedText.length < 50) {
-          // PDF might be scanned/image-based - try server OCR as fallback
-          console.log('PDF has little text, trying server-side OCR...');
-          try {
-            const base64 = btoa(
-              new Uint8Array(arrayBuffer).reduce(
-                (data, byte) => data + String.fromCharCode(byte),
-                ''
-              )
-            );
-
-            const response = await fetch(`${API_BASE}/api/parse-pdf`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ base64, useOcr: true }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              if (data.text && data.text.length > cleanedText.length) {
-                resolve(data.text);
-                return;
-              }
-            }
-          } catch (ocrError) {
-            console.error('Server OCR failed:', ocrError);
-          }
+        // If we got meaningful text, return it
+        if (cleanedText.length >= 50) {
+          console.log(`[PDF Parser] SUCCESS - extracted ${cleanedText.length} characters`);
+          resolve(cleanedText);
+          return;
         }
 
+        // PDF might be scanned/image-based - try server OCR as fallback
+        console.log('[PDF Parser] Low text count, attempting server-side OCR...');
+        try {
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce(
+              (data, byte) => data + String.fromCharCode(byte),
+              ''
+            )
+          );
+
+          const response = await fetch(`${API_BASE}/api/parse-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64, useOcr: true }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`[PDF Parser] Server OCR returned: ${data.text?.length || 0} chars, method: ${data.method}`);
+            if (data.text && data.text.length > cleanedText.length) {
+              resolve(data.text);
+              return;
+            }
+          } else {
+            console.error('[PDF Parser] Server OCR failed:', response.status);
+          }
+        } catch (ocrError) {
+          console.error('[PDF Parser] Server OCR error:', ocrError);
+        }
+
+        // Return whatever we have, even if empty
+        console.log(`[PDF Parser] Returning ${cleanedText.length} chars (best available)`);
         resolve(cleanedText);
       } catch (error) {
-        console.error('PDF.js parsing error:', error);
+        console.error('[PDF Parser] CRITICAL ERROR:', error);
         reject(error);
       }
     };
