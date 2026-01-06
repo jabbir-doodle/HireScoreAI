@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { Button, Card, Input, Textarea } from '../ui';
 import { useStore, generateId } from '../../store/useStore';
-import { colors, fonts, spacing, radius, fontSizes, fontWeights } from '../../styles/design-system';
+import { useResponsive } from '../../hooks/useResponsive';
+import { colors, fonts, radius, fontWeights } from '../../styles/design-system';
 import type { CSSProperties } from 'react';
 
 type InputMethod = 'upload' | 'url' | 'paste';
@@ -34,6 +35,9 @@ export function UploadScreen() {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Responsive
+  const { isMobile } = useResponsive();
+
   // URL input state
   const [cvUrl, setCvUrl] = useState('');
   const [cvName, setCvName] = useState('');
@@ -43,8 +47,18 @@ export function UploadScreen() {
   const [pastedText, setPastedText] = useState('');
   const [pasteName, setPasteName] = useState('');
 
-  // Pasted CVs list (stored separately from files)
+  // Pasted CVs list
   const [pastedCVs, setPastedCVs] = useState<PastedCV[]>([]);
+
+  // Responsive spacing
+  const pagePadding = isMobile ? '16px' : '24px';
+  const sectionGap = isMobile ? '20px' : '32px';
+  const fontSize = {
+    h1: isMobile ? '20px' : '24px',
+    body: isMobile ? '14px' : '16px',
+    small: isMobile ? '12px' : '14px',
+    xs: isMobile ? '11px' : '12px',
+  };
 
   // Styles
   const pageStyle: CSSProperties = {
@@ -58,16 +72,18 @@ export function UploadScreen() {
     inset: 0,
     pointerEvents: 'none',
     opacity: 0.4,
-    background: `
-      radial-gradient(ellipse 60% 40% at 70% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 50% at 30% 70%, rgba(0, 240, 255, 0.05) 0%, transparent 50%)
-    `,
+    background: isMobile
+      ? `radial-gradient(ellipse 100% 50% at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 50%)`
+      : `
+        radial-gradient(ellipse 60% 40% at 70% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 30% 70%, rgba(0, 240, 255, 0.05) 0%, transparent 50%)
+      `,
   };
 
   const containerStyle: CSSProperties = {
     position: 'relative',
     zIndex: 10,
-    padding: `${spacing[8]} ${spacing[6]}`,
+    padding: `${sectionGap} ${pagePadding}`,
     maxWidth: '800px',
     margin: '0 auto',
   };
@@ -75,119 +91,99 @@ export function UploadScreen() {
   const headerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[4],
-    marginBottom: spacing[8],
-  };
-
-  const dividerStyle: CSSProperties = {
-    height: '24px',
-    width: '1px',
-    backgroundColor: colors.steel,
+    gap: isMobile ? '12px' : '16px',
+    marginBottom: sectionGap,
+    flexWrap: 'wrap',
   };
 
   const h1Style: CSSProperties = {
     fontFamily: fonts.display,
-    fontSize: fontSizes['2xl'],
+    fontSize: fontSize.h1,
     fontWeight: fontWeights.bold,
     color: colors.snow,
     margin: 0,
-    marginBottom: spacing[1],
-  };
-
-  const stepTextStyle: CSSProperties = {
-    fontSize: fontSizes.sm,
-    color: colors.silver,
+    marginBottom: '4px',
   };
 
   const progressStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[4],
-    marginBottom: spacing[8],
+    gap: isMobile ? '8px' : '16px',
+    marginBottom: sectionGap,
+    overflowX: 'auto',
+    paddingBottom: '8px',
   };
 
   const stepCircleStyle = (active: boolean, completed: boolean): CSSProperties => ({
-    width: '32px',
-    height: '32px',
+    width: isMobile ? '28px' : '32px',
+    height: isMobile ? '28px' : '32px',
     borderRadius: radius.full,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: fontSizes.sm,
+    fontSize: isMobile ? '12px' : '14px',
     fontWeight: fontWeights.semibold,
     backgroundColor: active ? colors.cyan : completed ? colors.emerald : colors.graphite,
     color: active || completed ? colors.void : colors.silver,
     border: active || completed ? 'none' : `1px solid ${colors.steel}`,
+    flexShrink: 0,
   });
 
   const stepLabelStyle = (active: boolean): CSSProperties => ({
-    marginLeft: spacing[2],
-    fontSize: fontSizes.sm,
+    marginLeft: '6px',
+    fontSize: isMobile ? '12px' : '14px',
     color: active ? colors.snow : colors.silver,
+    whiteSpace: 'nowrap',
   });
 
   const stepLineStyle: CSSProperties = {
-    width: '48px',
+    width: isMobile ? '20px' : '48px',
     height: '1px',
     backgroundColor: colors.steel,
-    margin: `0 ${spacing[4]}`,
+    margin: isMobile ? '0 4px' : '0 16px',
+    flexShrink: 0,
   };
 
   const jobCardStyle: CSSProperties = {
     backgroundColor: 'rgba(26, 26, 36, 0.5)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
     borderRadius: radius.xl,
-    padding: spacing[5],
-    marginBottom: spacing[6],
+    padding: isMobile ? '12px' : '20px',
+    marginBottom: isMobile ? '16px' : '24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing[4],
-  };
-
-  const jobInfoStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing[4],
-    flex: 1,
-    minWidth: 0,
-  };
-
-  const jobIconStyle: CSSProperties = {
-    width: '48px',
-    height: '48px',
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    gap: isMobile ? '12px' : '16px',
+    flexWrap: 'wrap',
   };
 
   const tabsStyle: CSSProperties = {
     display: 'flex',
-    gap: spacing[2],
-    marginBottom: spacing[6],
+    gap: '8px',
+    marginBottom: isMobile ? '16px' : '24px',
+    flexWrap: 'wrap',
   };
 
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[2],
-    padding: `${spacing[3]} ${spacing[5]}`,
+    gap: '8px',
+    padding: isMobile ? '10px 14px' : '12px 20px',
     borderRadius: radius.lg,
-    fontSize: fontSizes.sm,
+    fontSize: isMobile ? '13px' : '14px',
     fontWeight: fontWeights.medium,
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     backgroundColor: active ? 'rgba(0, 240, 255, 0.1)' : colors.graphite,
     color: active ? colors.cyan : colors.silver,
     border: active ? `1px solid rgba(0, 240, 255, 0.3)` : '1px solid transparent',
+    flex: isMobile ? '1 1 calc(50% - 4px)' : 'none',
+    justifyContent: 'center',
   });
 
   const dropzoneStyle = (isDragOver: boolean): CSSProperties => ({
     position: 'relative',
-    padding: spacing[12],
+    padding: isMobile ? '32px 16px' : '48px',
     border: `2px dashed ${isDragOver ? colors.cyan : colors.steel}`,
     borderRadius: radius.xl,
     textAlign: 'center',
@@ -197,49 +193,33 @@ export function UploadScreen() {
   });
 
   const errorBoxStyle: CSSProperties = {
-    marginTop: spacing[4],
-    padding: spacing[4],
+    marginTop: '16px',
+    padding: isMobile ? '12px' : '16px',
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
     border: '1px solid rgba(255, 107, 107, 0.2)',
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[3],
-  };
-
-  const fileListHeaderStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    gap: '12px',
   };
 
   const fileItemStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing[3],
+    padding: isMobile ? '10px' : '12px',
     borderRadius: radius.lg,
     backgroundColor: 'rgba(26, 26, 36, 0.5)',
-    marginBottom: spacing[2],
-  };
-
-  const fileIconStyle: CSSProperties = {
-    width: '40px',
-    height: '40px',
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    marginBottom: '8px',
+    gap: '12px',
   };
 
   const actionsStyle: CSSProperties = {
-    marginTop: spacing[8],
+    marginTop: sectionGap,
     display: 'flex',
-    gap: spacing[4],
-    justifyContent: 'flex-end',
+    gap: '16px',
+    justifyContent: isMobile ? 'stretch' : 'flex-end',
+    flexDirection: isMobile ? 'column' : 'row',
   };
 
   // Handle file selection
@@ -259,7 +239,7 @@ export function UploadScreen() {
     });
 
     if (invalidFiles.length > 0) {
-      setError(`Invalid files skipped: ${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`);
+      setError(`Invalid: ${invalidFiles.slice(0, 2).join(', ')}${invalidFiles.length > 2 ? '...' : ''}`);
       setTimeout(() => setError(null), 5000);
     }
 
@@ -295,7 +275,6 @@ export function UploadScreen() {
     setError(null);
 
     try {
-      // Try to fetch the URL content
       const proxies = [
         'https://api.allorigins.win/raw?url=',
         'https://corsproxy.io/?'
@@ -318,7 +297,6 @@ export function UploadScreen() {
         throw new Error('Could not fetch URL');
       }
 
-      // Extract text from HTML
       const div = document.createElement('div');
       div.innerHTML = content;
       ['script', 'style', 'nav', 'footer', 'header', 'aside'].forEach(tag => {
@@ -330,7 +308,6 @@ export function UploadScreen() {
         throw new Error('No content found at URL');
       }
 
-      // Add to pasted CVs
       const name = cvName || `CV from ${new URL(cvUrl).hostname}`;
       setPastedCVs(prev => [...prev, {
         id: generateId(),
@@ -339,7 +316,6 @@ export function UploadScreen() {
         source: 'url'
       }]);
 
-      // Clear inputs
       setCvUrl('');
       setCvName('');
       setUrlLoading(false);
@@ -358,7 +334,7 @@ export function UploadScreen() {
     }
 
     if (pastedText.trim().length < 50) {
-      setError('CV content seems too short. Please paste the full CV.');
+      setError('CV content seems too short');
       return;
     }
 
@@ -370,23 +346,19 @@ export function UploadScreen() {
       source: 'paste'
     }]);
 
-    // Clear inputs
     setPastedText('');
     setPasteName('');
     setError(null);
   }, [pastedText, pasteName, pastedCVs.length]);
 
-  // Remove pasted CV
   const removePastedCV = useCallback((id: string) => {
     setPastedCVs(prev => prev.filter(cv => cv.id !== id));
   }, []);
 
-  // Clear all pasted CVs
   const clearPastedCVs = useCallback(() => {
     setPastedCVs([]);
   }, []);
 
-  // Start screening with all CVs
   const handleStartScreening = useCallback(() => {
     const totalCVs = uploadedCVs.length + pastedCVs.length;
     if (totalCVs === 0) {
@@ -394,7 +366,6 @@ export function UploadScreen() {
       return;
     }
 
-    // Convert pasted CVs to File objects for unified handling
     const pastedFiles = pastedCVs.map(cv => {
       const blob = new Blob([cv.content], { type: 'text/plain' });
       return new File([blob], `${cv.name}.txt`, { type: 'text/plain' });
@@ -407,7 +378,6 @@ export function UploadScreen() {
     startScreening();
   }, [uploadedCVs.length, pastedCVs, addCVs, startScreening]);
 
-  // Clear all CVs
   const handleClearAll = useCallback(() => {
     clearCVs();
     clearPastedCVs();
@@ -420,15 +390,15 @@ export function UploadScreen() {
   };
 
   const steps = [
-    { step: 1, label: 'Job Description', active: false, completed: true },
-    { step: 2, label: 'Upload CVs', active: true, completed: false },
+    { step: 1, label: 'Job', active: false, completed: true },
+    { step: 2, label: 'CVs', active: true, completed: false },
     { step: 3, label: 'Results', active: false, completed: false },
   ];
 
   const tabs = [
-    { id: 'upload', label: 'Upload Files', Icon: Upload },
-    { id: 'url', label: 'From URL', Icon: Link },
-    { id: 'paste', label: 'Paste Text', Icon: ClipboardPaste },
+    { id: 'upload', label: 'Upload', Icon: Upload },
+    { id: 'url', label: 'URL', Icon: Link },
+    { id: 'paste', label: 'Paste', Icon: ClipboardPaste },
   ];
 
   const totalCVs = uploadedCVs.length + pastedCVs.length;
@@ -450,12 +420,12 @@ export function UploadScreen() {
             icon={<ArrowLeft style={{ width: 16, height: 16 }} />}
             onClick={() => setScreen('job')}
           >
-            Back
+            {!isMobile && 'Back'}
           </Button>
-          <div style={dividerStyle} />
-          <div style={{ flex: 1 }}>
+          <div style={{ height: '24px', width: '1px', backgroundColor: colors.steel }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={h1Style}>Upload CVs</h1>
-            <p style={stepTextStyle}>Step 2 of 3</p>
+            <p style={{ fontSize: fontSize.small, color: colors.silver, margin: 0 }}>Step 2 of 3</p>
           </div>
         </motion.div>
 
@@ -485,20 +455,29 @@ export function UploadScreen() {
             transition={{ delay: 0.2 }}
             style={jobCardStyle}
           >
-            <div style={jobInfoStyle}>
-              <div style={jobIconStyle}>
-                <Briefcase style={{ width: 24, height: 24, color: colors.violet }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '16px', flex: 1, minWidth: 0 }}>
+              <div style={{
+                width: isMobile ? '40px' : '48px',
+                height: isMobile ? '40px' : '48px',
+                borderRadius: radius.lg,
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Briefcase style={{ width: isMobile ? 20 : 24, height: isMobile ? 20 : 24, color: colors.violet }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <h3 style={{ fontFamily: fonts.display, fontWeight: fontWeights.semibold, color: colors.snow, fontSize: fontSizes.base, margin: 0 }}>
+                <h3 style={{ fontFamily: fonts.display, fontWeight: fontWeights.semibold, color: colors.snow, fontSize: isMobile ? '14px' : '16px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentJob.title}
                 </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2], fontSize: fontSizes.sm, color: colors.silver, marginTop: spacing[1] }}>
-                  <span>{currentJob.company}</span>
-                  {currentJob.location && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: fontSize.xs, color: colors.silver, marginTop: '2px', flexWrap: 'wrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentJob.company}</span>
+                  {currentJob.location && !isMobile && (
                     <>
-                      <span style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: colors.silver }} />
-                      <span style={{ display: 'flex', alignItems: 'center', gap: spacing[1] }}>
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: colors.silver, flexShrink: 0 }} />
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <MapPin style={{ width: 12, height: 12 }} />
                         {currentJob.location}
                       </span>
@@ -538,7 +517,7 @@ export function UploadScreen() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card variant="glass" padding="md">
+          <Card variant="glass" padding={isMobile ? 'sm' : 'md'}>
             <AnimatePresence mode="wait">
               {/* Upload Files Tab */}
               {method === 'upload' && (
@@ -564,26 +543,26 @@ export function UploadScreen() {
 
                     <div style={{ pointerEvents: 'none' }}>
                       <div style={{
-                        width: '64px',
-                        height: '64px',
+                        width: isMobile ? '48px' : '64px',
+                        height: isMobile ? '48px' : '64px',
                         borderRadius: radius.xl,
                         backgroundColor: 'rgba(0, 240, 255, 0.1)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         margin: '0 auto',
-                        marginBottom: spacing[4],
+                        marginBottom: '16px',
                       }}>
-                        <Upload style={{ width: 32, height: 32, color: dragOver ? colors.cyan : colors.silver }} />
+                        <Upload style={{ width: isMobile ? 24 : 32, height: isMobile ? 24 : 32, color: dragOver ? colors.cyan : colors.silver }} />
                       </div>
-                      <h3 style={{ fontFamily: fonts.display, fontSize: fontSizes.xl, fontWeight: fontWeights.semibold, color: colors.snow, marginBottom: spacing[2] }}>
-                        {dragOver ? 'Drop files here' : 'Drag & drop CVs here'}
+                      <h3 style={{ fontFamily: fonts.display, fontSize: isMobile ? '16px' : '20px', fontWeight: fontWeights.semibold, color: colors.snow, marginBottom: '8px' }}>
+                        {dragOver ? 'Drop files here' : 'Drag & drop CVs'}
                       </h3>
-                      <p style={{ color: colors.silver, fontSize: fontSizes.base, marginBottom: spacing[4] }}>
-                        or click to browse files
+                      <p style={{ color: colors.silver, fontSize: fontSize.body, marginBottom: '16px' }}>
+                        or tap to browse files
                       </p>
-                      <p style={{ fontSize: fontSizes.xs, color: 'rgba(136, 136, 160, 0.6)' }}>
-                        Supports PDF, DOC, DOCX, TXT, HTML
+                      <p style={{ fontSize: fontSize.xs, color: 'rgba(136, 136, 160, 0.6)' }}>
+                        PDF, DOC, DOCX, TXT, HTML
                       </p>
                     </div>
                   </div>
@@ -598,16 +577,16 @@ export function UploadScreen() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                 >
-                  <div style={{ marginBottom: spacing[4] }}>
+                  <div style={{ marginBottom: '16px' }}>
                     <Input
                       label="CV/Profile URL"
-                      placeholder="https://linkedin.com/in/... or any CV URL"
+                      placeholder="https://linkedin.com/in/..."
                       value={cvUrl}
                       onChange={(e) => setCvUrl(e.target.value)}
                       icon={<Link style={{ width: 16, height: 16 }} />}
                     />
                   </div>
-                  <div style={{ marginBottom: spacing[4] }}>
+                  <div style={{ marginBottom: '16px' }}>
                     <Input
                       label="Candidate Name (Optional)"
                       placeholder="e.g., John Smith"
@@ -625,9 +604,6 @@ export function UploadScreen() {
                   >
                     {urlLoading ? 'Fetching...' : 'Add CV from URL'}
                   </Button>
-                  <p style={{ fontSize: fontSizes.xs, color: colors.silver, marginTop: spacing[3], textAlign: 'center' }}>
-                    Works with LinkedIn profiles, online CVs, and portfolio pages
-                  </p>
                 </motion.div>
               )}
 
@@ -639,7 +615,7 @@ export function UploadScreen() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                 >
-                  <div style={{ marginBottom: spacing[4] }}>
+                  <div style={{ marginBottom: '16px' }}>
                     <Input
                       label="Candidate Name"
                       placeholder="e.g., John Smith"
@@ -648,13 +624,13 @@ export function UploadScreen() {
                       icon={<User style={{ width: 16, height: 16 }} />}
                     />
                   </div>
-                  <div style={{ marginBottom: spacing[4] }}>
+                  <div style={{ marginBottom: '16px' }}>
                     <Textarea
                       label="CV Content"
-                      placeholder="Paste the candidate's CV or resume content here..."
+                      placeholder="Paste CV content here..."
                       value={pastedText}
                       onChange={(e) => setPastedText(e.target.value)}
-                      style={{ minHeight: '200px', fontFamily: fonts.mono, fontSize: fontSizes.sm }}
+                      style={{ minHeight: isMobile ? '150px' : '200px', fontFamily: fonts.mono, fontSize: fontSize.small }}
                     />
                   </div>
                   <Button
@@ -681,7 +657,7 @@ export function UploadScreen() {
               style={errorBoxStyle}
             >
               <AlertCircle style={{ width: 20, height: 20, color: colors.coral, flexShrink: 0 }} />
-              <span style={{ fontSize: fontSizes.sm, color: colors.coral }}>{error}</span>
+              <span style={{ fontSize: fontSize.small, color: colors.coral }}>{error}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -693,11 +669,11 @@ export function UploadScreen() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              style={{ marginTop: spacing[6] }}
+              style={{ marginTop: isMobile ? '16px' : '24px' }}
             >
-              <Card variant="glass" padding="md">
-                <div style={fileListHeaderStyle}>
-                  <h3 style={{ fontFamily: fonts.display, fontWeight: fontWeights.semibold, color: colors.snow, fontSize: fontSizes.base, margin: 0 }}>
+              <Card variant="glass" padding={isMobile ? 'sm' : 'md'}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h3 style={{ fontFamily: fonts.display, fontWeight: fontWeights.semibold, color: colors.snow, fontSize: fontSize.body, margin: 0 }}>
                     {totalCVs} CV{totalCVs !== 1 ? 's' : ''} Ready
                   </h3>
                   <Button
@@ -706,11 +682,11 @@ export function UploadScreen() {
                     onClick={handleClearAll}
                     style={{ color: colors.coral }}
                   >
-                    Clear All
+                    Clear
                   </Button>
                 </div>
 
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
                   {/* Uploaded Files */}
                   {uploadedCVs.map((file, index) => (
                     <motion.div
@@ -721,23 +697,32 @@ export function UploadScreen() {
                       transition={{ delay: index * 0.02 }}
                       style={fileItemStyle}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: spacing[3], minWidth: 0, flex: 1 }}>
-                        <div style={fileIconStyle}>
-                          <FileText style={{ width: 20, height: 20, color: colors.violet }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          width: isMobile ? '32px' : '40px',
+                          height: isMobile ? '32px' : '40px',
+                          borderRadius: radius.md,
+                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <FileText style={{ width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, color: colors.violet }} />
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <p style={{ fontSize: fontSizes.sm, color: colors.snow, fontWeight: fontWeights.medium, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <p style={{ fontSize: fontSize.small, color: colors.snow, fontWeight: fontWeights.medium, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {file.name}
                           </p>
-                          <p style={{ fontSize: fontSizes.xs, color: colors.silver, margin: 0 }}>
-                            {formatSize(file.size)} • File Upload
+                          <p style={{ fontSize: fontSize.xs, color: colors.silver, margin: 0 }}>
+                            {formatSize(file.size)}
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => removeCVs(index)}
                         style={{
-                          padding: spacing[2],
+                          padding: '8px',
                           borderRadius: radius.md,
                           border: 'none',
                           backgroundColor: 'transparent',
@@ -763,30 +748,36 @@ export function UploadScreen() {
                       transition={{ delay: (uploadedCVs.length + index) * 0.02 }}
                       style={fileItemStyle}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: spacing[3], minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
                         <div style={{
-                          ...fileIconStyle,
-                          backgroundColor: cv.source === 'url' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 255, 136, 0.1)'
+                          width: isMobile ? '32px' : '40px',
+                          height: isMobile ? '32px' : '40px',
+                          borderRadius: radius.md,
+                          backgroundColor: cv.source === 'url' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 255, 136, 0.1)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
                         }}>
                           {cv.source === 'url' ? (
-                            <Link style={{ width: 20, height: 20, color: colors.cyan }} />
+                            <Link style={{ width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, color: colors.cyan }} />
                           ) : (
-                            <ClipboardPaste style={{ width: 20, height: 20, color: colors.emerald }} />
+                            <ClipboardPaste style={{ width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, color: colors.emerald }} />
                           )}
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <p style={{ fontSize: fontSizes.sm, color: colors.snow, fontWeight: fontWeights.medium, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <p style={{ fontSize: fontSize.small, color: colors.snow, fontWeight: fontWeights.medium, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {cv.name}
                           </p>
-                          <p style={{ fontSize: fontSizes.xs, color: colors.silver, margin: 0 }}>
-                            {cv.content.length.toLocaleString()} chars • {cv.source === 'url' ? 'From URL' : 'Pasted'}
+                          <p style={{ fontSize: fontSize.xs, color: colors.silver, margin: 0 }}>
+                            {cv.content.length.toLocaleString()} chars
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => removePastedCV(cv.id)}
                         style={{
-                          padding: spacing[2],
+                          padding: '8px',
                           borderRadius: radius.md,
                           border: 'none',
                           backgroundColor: 'transparent',
@@ -815,10 +806,11 @@ export function UploadScreen() {
           style={actionsStyle}
         >
           <Button
-            size="lg"
+            size={isMobile ? 'md' : 'lg'}
             icon={<Zap style={{ width: 20, height: 20 }} />}
             onClick={handleStartScreening}
             disabled={totalCVs === 0}
+            fullWidth={isMobile}
           >
             Start AI Screening ({totalCVs})
           </Button>

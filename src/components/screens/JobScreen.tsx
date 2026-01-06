@@ -15,8 +15,9 @@ import {
 } from 'lucide-react';
 import { Button, Card, Input, Textarea } from '../ui';
 import { useStore, generateId } from '../../store/useStore';
+import { useResponsive } from '../../hooks/useResponsive';
 import { api } from '../../services/api';
-import { colors, fonts, spacing, radius, fontSizes, fontWeights } from '../../styles/design-system';
+import { colors, fonts, radius, fontWeights } from '../../styles/design-system';
 import type { JobDescription } from '../../types';
 import type { CSSProperties } from 'react';
 
@@ -28,6 +29,9 @@ export function JobScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Responsive
+  const { isMobile } = useResponsive();
+
   // Form state
   const [title, setTitle] = useState(currentJob?.title || '');
   const [company, setCompany] = useState(currentJob?.company || '');
@@ -35,6 +39,16 @@ export function JobScreen() {
   const [experience, setExperience] = useState(currentJob?.experience || '');
   const [rawText, setRawText] = useState(currentJob?.rawText || '');
   const [url, setUrl] = useState('');
+
+  // Responsive spacing
+  const pagePadding = isMobile ? '16px' : '24px';
+  const sectionGap = isMobile ? '20px' : '32px';
+  const fontSize = {
+    h1: isMobile ? '20px' : '24px',
+    body: isMobile ? '14px' : '16px',
+    small: isMobile ? '12px' : '14px',
+    xs: isMobile ? '11px' : '12px',
+  };
 
   // Styles
   const pageStyle: CSSProperties = {
@@ -48,16 +62,18 @@ export function JobScreen() {
     inset: 0,
     pointerEvents: 'none',
     opacity: 0.4,
-    background: `
-      radial-gradient(ellipse 60% 40% at 30% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 50% at 70% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%)
-    `,
+    background: isMobile
+      ? `radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 240, 255, 0.08) 0%, transparent 50%)`
+      : `
+        radial-gradient(ellipse 60% 40% at 30% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 70% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%)
+      `,
   };
 
   const containerStyle: CSSProperties = {
     position: 'relative',
     zIndex: 10,
-    padding: `${spacing[8]} ${spacing[6]}`,
+    padding: `${sectionGap} ${pagePadding}`,
     maxWidth: '800px',
     margin: '0 auto',
   };
@@ -65,138 +81,124 @@ export function JobScreen() {
   const headerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[4],
-    marginBottom: spacing[8],
-  };
-
-  const dividerStyle: CSSProperties = {
-    height: '24px',
-    width: '1px',
-    backgroundColor: colors.steel,
-  };
-
-  const headerTextStyle: CSSProperties = {
-    flex: 1,
+    gap: isMobile ? '12px' : '16px',
+    marginBottom: sectionGap,
+    flexWrap: 'wrap',
   };
 
   const h1Style: CSSProperties = {
     fontFamily: fonts.display,
-    fontSize: fontSizes['2xl'],
+    fontSize: fontSize.h1,
     fontWeight: fontWeights.bold,
     color: colors.snow,
     margin: 0,
-    marginBottom: spacing[1],
-  };
-
-  const stepTextStyle: CSSProperties = {
-    fontSize: fontSizes.sm,
-    color: colors.silver,
+    marginBottom: '4px',
   };
 
   const progressStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[4],
-    marginBottom: spacing[8],
+    gap: isMobile ? '8px' : '16px',
+    marginBottom: sectionGap,
+    overflowX: 'auto',
+    paddingBottom: '8px',
   };
 
   const stepCircleStyle = (active: boolean): CSSProperties => ({
-    width: '32px',
-    height: '32px',
+    width: isMobile ? '28px' : '32px',
+    height: isMobile ? '28px' : '32px',
     borderRadius: radius.full,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: fontSizes.sm,
+    fontSize: isMobile ? '12px' : '14px',
     fontWeight: fontWeights.semibold,
     backgroundColor: active ? colors.cyan : colors.graphite,
     color: active ? colors.void : colors.silver,
     border: active ? 'none' : `1px solid ${colors.steel}`,
+    flexShrink: 0,
   });
 
   const stepLabelStyle = (active: boolean): CSSProperties => ({
-    marginLeft: spacing[2],
-    fontSize: fontSizes.sm,
+    marginLeft: '6px',
+    fontSize: isMobile ? '12px' : '14px',
     color: active ? colors.snow : colors.silver,
+    whiteSpace: 'nowrap',
   });
 
   const stepLineStyle: CSSProperties = {
-    width: '48px',
+    width: isMobile ? '20px' : '48px',
     height: '1px',
     backgroundColor: colors.steel,
-    margin: `0 ${spacing[4]}`,
+    margin: isMobile ? '0 4px' : '0 16px',
+    flexShrink: 0,
   };
 
   const tabsStyle: CSSProperties = {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: spacing[2],
-    marginBottom: spacing[6],
+    gap: '8px',
+    marginBottom: isMobile ? '16px' : '24px',
   };
 
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[2],
-    padding: `${spacing[2]} ${spacing[4]}`,
+    gap: '8px',
+    padding: isMobile ? '8px 12px' : '8px 16px',
     borderRadius: radius.lg,
-    fontSize: fontSizes.sm,
+    fontSize: isMobile ? '13px' : '14px',
     fontWeight: fontWeights.medium,
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     backgroundColor: active ? 'rgba(0, 240, 255, 0.1)' : colors.graphite,
     color: active ? colors.cyan : colors.silver,
     border: active ? `1px solid rgba(0, 240, 255, 0.3)` : '1px solid transparent',
+    flex: isMobile ? '1 1 calc(50% - 4px)' : 'none',
+    justifyContent: 'center',
   });
 
   const dropzoneStyle: CSSProperties = {
     border: `2px dashed ${colors.steel}`,
     borderRadius: radius.xl,
-    padding: spacing[12],
+    padding: isMobile ? '32px 16px' : '48px',
     textAlign: 'center',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
   };
 
   const successBoxStyle: CSSProperties = {
-    marginTop: spacing[4],
-    padding: spacing[4],
+    marginTop: '16px',
+    padding: isMobile ? '12px' : '16px',
     borderRadius: radius.lg,
     backgroundColor: 'rgba(0, 255, 136, 0.1)',
     border: '1px solid rgba(0, 255, 136, 0.2)',
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[3],
+    gap: '12px',
   };
 
   const errorBoxStyle: CSSProperties = {
-    marginTop: spacing[4],
-    padding: spacing[4],
+    marginTop: '16px',
+    padding: isMobile ? '12px' : '16px',
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
     border: '1px solid rgba(255, 107, 107, 0.2)',
     display: 'flex',
     alignItems: 'center',
-    gap: spacing[3],
-  };
-
-  const detailsHeaderStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[4],
+    gap: '12px',
   };
 
   const gridStyle: CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: spacing[4],
+    gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+    gap: isMobile ? '12px' : '16px',
   };
 
   const footerStyle: CSSProperties = {
-    marginTop: spacing[8],
+    marginTop: sectionGap,
     display: 'flex',
-    justifyContent: 'flex-end',
+    justifyContent: isMobile ? 'stretch' : 'flex-end',
   };
 
   // Extract job info from text
@@ -279,7 +281,6 @@ export function JobScreen() {
     setError(null);
 
     try {
-      // Use backend proxy to avoid CORS issues
       const result = await api.fetchUrl(url);
 
       if (!result.success) {
@@ -333,15 +334,15 @@ export function JobScreen() {
   }, [title, company, location, experience, rawText, addJob, setScreen]);
 
   const steps = [
-    { step: 1, label: 'Job Description', active: true },
-    { step: 2, label: 'Upload CVs', active: false },
+    { step: 1, label: 'Job', active: true },
+    { step: 2, label: 'CVs', active: false },
     { step: 3, label: 'Results', active: false },
   ];
 
   const tabs = [
-    { id: 'paste', label: 'Paste Text', Icon: FileText },
-    { id: 'url', label: 'From URL', Icon: Link },
-    { id: 'file', label: 'Upload File', Icon: Upload },
+    { id: 'paste', label: 'Paste', Icon: FileText },
+    { id: 'url', label: 'URL', Icon: Link },
+    { id: 'file', label: 'Upload', Icon: Upload },
   ];
 
   return (
@@ -361,12 +362,12 @@ export function JobScreen() {
             icon={<ArrowLeft style={{ width: 16, height: 16 }} />}
             onClick={() => setScreen('landing')}
           >
-            Back
+            {!isMobile && 'Back'}
           </Button>
-          <div style={dividerStyle} />
-          <div style={headerTextStyle}>
+          <div style={{ height: '24px', width: '1px', backgroundColor: colors.steel }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={h1Style}>Add Job Description</h1>
-            <p style={stepTextStyle}>Step 1 of 3</p>
+            <p style={{ fontSize: fontSize.small, color: colors.silver, margin: 0 }}>Step 1 of 3</p>
           </div>
         </motion.div>
 
@@ -411,7 +412,7 @@ export function JobScreen() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card variant="glass" padding="md">
+          <Card variant="glass" padding={isMobile ? 'sm' : 'md'}>
             <AnimatePresence mode="wait">
               {method === 'paste' && (
                 <motion.div
@@ -425,7 +426,7 @@ export function JobScreen() {
                     placeholder="Paste the complete job description here..."
                     value={rawText}
                     onChange={(e) => handleTextChange(e.target.value)}
-                    style={{ minHeight: '250px', fontFamily: fonts.mono, fontSize: fontSizes.sm }}
+                    style={{ minHeight: isMobile ? '180px' : '250px', fontFamily: fonts.mono, fontSize: fontSize.small }}
                   />
                 </motion.div>
               )}
@@ -437,7 +438,7 @@ export function JobScreen() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                 >
-                  <div style={{ display: 'flex', gap: spacing[3], marginBottom: spacing[4] }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginBottom: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <Input
                         label="Job Posting URL"
@@ -447,8 +448,8 @@ export function JobScreen() {
                         icon={<Link style={{ width: 16, height: 16 }} />}
                       />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                      <Button onClick={handleUrlFetch} loading={loading} disabled={!url}>
+                    <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+                      <Button onClick={handleUrlFetch} loading={loading} disabled={!url} fullWidth={isMobile}>
                         Fetch
                       </Button>
                     </div>
@@ -456,8 +457,8 @@ export function JobScreen() {
                   {rawText && (
                     <div style={successBoxStyle}>
                       <CheckCircle style={{ width: 20, height: 20, color: colors.emerald, flexShrink: 0 }} />
-                      <span style={{ fontSize: fontSizes.sm, color: colors.emerald }}>
-                        Job description loaded ({rawText.length.toLocaleString()} characters)
+                      <span style={{ fontSize: fontSize.small, color: colors.emerald }}>
+                        Loaded ({rawText.length.toLocaleString()} chars)
                       </span>
                     </div>
                   )}
@@ -473,11 +474,11 @@ export function JobScreen() {
                 >
                   <label>
                     <div style={dropzoneStyle}>
-                      <Upload style={{ width: 40, height: 40, color: colors.silver, margin: '0 auto', marginBottom: spacing[4] }} />
-                      <p style={{ color: colors.snow, fontWeight: fontWeights.medium, marginBottom: spacing[1], fontSize: fontSizes.base }}>
-                        Drop file here or click to browse
+                      <Upload style={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, color: colors.silver, margin: '0 auto', marginBottom: '16px' }} />
+                      <p style={{ color: colors.snow, fontWeight: fontWeights.medium, marginBottom: '4px', fontSize: fontSize.body }}>
+                        Drop file here or tap to browse
                       </p>
-                      <p style={{ fontSize: fontSizes.sm, color: colors.silver }}>
+                      <p style={{ fontSize: fontSize.small, color: colors.silver }}>
                         Supports .txt, .html, .doc, .docx
                       </p>
                     </div>
@@ -491,8 +492,8 @@ export function JobScreen() {
                   {rawText && (
                     <div style={successBoxStyle}>
                       <CheckCircle style={{ width: 20, height: 20, color: colors.emerald, flexShrink: 0 }} />
-                      <span style={{ fontSize: fontSizes.sm, color: colors.emerald }}>
-                        File loaded successfully ({rawText.length.toLocaleString()} characters)
+                      <span style={{ fontSize: fontSize.small, color: colors.emerald }}>
+                        File loaded ({rawText.length.toLocaleString()} chars)
                       </span>
                     </div>
                   )}
@@ -508,7 +509,7 @@ export function JobScreen() {
                 style={errorBoxStyle}
               >
                 <AlertCircle style={{ width: 20, height: 20, color: colors.coral, flexShrink: 0 }} />
-                <span style={{ fontSize: fontSizes.sm, color: colors.coral }}>{error}</span>
+                <span style={{ fontSize: fontSize.small, color: colors.coral }}>{error}</span>
               </motion.div>
             )}
           </Card>
@@ -519,15 +520,16 @@ export function JobScreen() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
+          style={{ marginTop: isMobile ? '16px' : '24px' }}
         >
-          <Card variant="glass" padding="md">
-            <div style={detailsHeaderStyle}>
-              <Sparkles style={{ width: 20, height: 20, color: colors.cyan }} />
-              <h3 style={{ fontFamily: fonts.display, fontSize: fontSizes.lg, fontWeight: fontWeights.semibold, color: colors.snow, margin: 0 }}>
+          <Card variant="glass" padding={isMobile ? 'sm' : 'md'}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: isMobile ? '12px' : '16px', flexWrap: 'wrap' }}>
+              <Sparkles style={{ width: 18, height: 18, color: colors.cyan }} />
+              <h3 style={{ fontFamily: fonts.display, fontSize: isMobile ? '15px' : '18px', fontWeight: fontWeights.semibold, color: colors.snow, margin: 0 }}>
                 Job Details
               </h3>
-              <span style={{ fontSize: fontSizes.xs, color: colors.silver, marginLeft: spacing[2] }}>
-                (Auto-filled from description)
+              <span style={{ fontSize: fontSize.xs, color: colors.silver }}>
+                (Auto-filled)
               </span>
             </div>
 
@@ -571,13 +573,14 @@ export function JobScreen() {
           style={footerStyle}
         >
           <Button
-            size="lg"
+            size={isMobile ? 'md' : 'lg'}
             icon={<ArrowRight style={{ width: 20, height: 20 }} />}
             iconPosition="right"
             onClick={handleContinue}
             disabled={!title || !rawText}
+            fullWidth={isMobile}
           >
-            Continue to Upload CVs
+            {isMobile ? 'Continue' : 'Continue to Upload CVs'}
           </Button>
         </motion.div>
       </div>
