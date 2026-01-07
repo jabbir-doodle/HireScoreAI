@@ -7,9 +7,10 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// PDF.js worker setup - disable worker for simpler, more reliable parsing
-// This runs parsing on main thread (slightly slower but 100% reliable)
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+// PDF.js worker setup - MUST use a real worker for PDF.js 5.x to function
+// Use unpkg CDN for exact npm version match (verified working)
+// pdfjs-dist version: 5.4.530
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs';
 
 // Use relative URLs in production (Vercel), absolute in development
 const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || 'http://localhost:3001');
@@ -220,6 +221,7 @@ export async function screenBatch(
 
 /**
  * Parse PDF file using PDF.js (client-side - more reliable)
+ * Uses unpkg CDN for the worker to ensure consistent behavior across environments
  */
 export async function parsePdf(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -230,11 +232,31 @@ export async function parsePdf(file: File): Promise<string> {
         const typedArray = new Uint8Array(arrayBuffer);
 
         console.log(`[PDF Parser] Starting PDF.js parsing, file size: ${typedArray.length} bytes`);
+        console.log(`[PDF Parser] Worker source: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
 
-        // Load PDF using PDF.js
-        const loadingTask = pdfjsLib.getDocument({ data: typedArray });
+        // Verify we have valid PDF data (PDF magic bytes: %PDF)
+        const header = String.fromCharCode(...typedArray.slice(0, 5));
+        if (!header.startsWith('%PDF')) {
+          console.warn('[PDF Parser] File does not have PDF magic bytes, may not be a valid PDF');
+        }
+
+        // Load PDF using PDF.js with enhanced options
+        const loadingTask = pdfjsLib.getDocument({
+          data: typedArray,
+          useWorkerFetch: false,
+          isEvalSupported: false,
+          useSystemFonts: true,
+        });
+
+        // Add progress logging
+        loadingTask.onProgress = (progress: { loaded: number; total: number }) => {
+          if (progress.total > 0) {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            console.log(`[PDF Parser] Loading: ${percent}%`);
+          }
+        };
+
         const pdf = await loadingTask.promise;
-
         console.log(`[PDF Parser] PDF loaded successfully, pages: ${pdf.numPages}`);
 
         let fullText = '';
@@ -247,20 +269,35 @@ export async function parsePdf(file: File): Promise<string> {
           const pageItems = textContent.items;
           totalItems += pageItems.length;
 
+          // Improved text extraction with better spacing
+          let lastY = 0;
           const pageText = pageItems
             .map((item) => {
+              if ('str' in item && 'transform' in item) {
+                const textItem = item as { str: string; transform: number[] };
+                const currentY = textItem.transform[5];
+                // Add newline if Y position changed significantly (new line)
+                const prefix = lastY !== 0 && Math.abs(currentY - lastY) > 10 ? '\n' : ' ';
+                lastY = currentY;
+                return prefix + textItem.str;
+              }
               if ('str' in item) {
-                return (item as { str: string }).str;
+                return ' ' + (item as { str: string }).str;
               }
               return '';
             })
-            .join(' ');
+            .join('');
 
           fullText += pageText + '\n\n';
           console.log(`[PDF Parser] Page ${i}: ${pageItems.length} items, ${pageText.length} chars`);
         }
 
-        const cleanedText = fullText.trim();
+        // Clean up the extracted text
+        const cleanedText = fullText
+          .replace(/\s+/g, ' ')  // Collapse multiple spaces
+          .replace(/\n\s*\n/g, '\n\n')  // Normalize paragraph breaks
+          .trim();
+
         console.log(`[PDF Parser] Total extracted: ${cleanedText.length} chars from ${totalItems} items`);
 
         // If we got meaningful text, return it
@@ -305,7 +342,10 @@ export async function parsePdf(file: File): Promise<string> {
         resolve(cleanedText);
       } catch (error) {
         console.error('[PDF Parser] CRITICAL ERROR:', error);
-        reject(error);
+        // Provide more context in error
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[PDF Parser] Error details:', errorMessage);
+        reject(new Error(`PDF parsing failed: ${errorMessage}`));
       }
     };
     reader.onerror = () => reject(new Error('Failed to read file'));

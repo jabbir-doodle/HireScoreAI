@@ -6,13 +6,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  */
 
 // Bump this version with each deployment
-const API_VERSION = '2.2.0';
+const API_VERSION = '2.3.0';
 
 // Build timestamp (set at deployment time)
 const BUILD_TIME = new Date().toISOString();
 
 // Changelog for quick reference
 const CHANGELOG = {
+  '2.3.0': 'Fix PDF.js worker - use unpkg CDN for reliable parsing',
   '2.2.0': 'Fix all model IDs to use REAL OpenRouter IDs (no date suffixes)',
   '2.1.1': 'Fix MCF status field type handling',
   '2.1.0': 'MyCareersFuture API integration, enterprise security',
