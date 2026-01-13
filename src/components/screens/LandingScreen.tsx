@@ -114,7 +114,6 @@ export function LandingScreen() {
             <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
               <a href="#how-it-works" style={{ color: colors.silver, textDecoration: 'none', fontSize: '14px', fontWeight: fontWeights.medium }}>How It Works</a>
               <a href="#features" style={{ color: colors.silver, textDecoration: 'none', fontSize: '14px', fontWeight: fontWeights.medium }}>Features</a>
-              <a href="#pricing" style={{ color: colors.silver, textDecoration: 'none', fontSize: '14px', fontWeight: fontWeights.medium }}>Pricing</a>
               <Button variant="primary" size="sm" onClick={() => setScreen('job')}>
                 Start Free Trial
               </Button>
@@ -163,7 +162,6 @@ export function LandingScreen() {
               }}>
                 <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} style={{ color: colors.silver, textDecoration: 'none', fontSize: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)' }}>How It Works</a>
                 <a href="#features" onClick={() => setMobileMenuOpen(false)} style={{ color: colors.silver, textDecoration: 'none', fontSize: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)' }}>Features</a>
-                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: colors.silver, textDecoration: 'none', fontSize: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)' }}>Pricing</a>
                 <Button variant="primary" fullWidth onClick={() => { setScreen('job'); setMobileMenuOpen(false); }} style={{ marginTop: '8px' }}>
                   Start Free Trial
                 </Button>
@@ -753,108 +751,7 @@ export function LandingScreen() {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" style={{
-        padding: `${spacing.sectionPaddingY} ${spacing.pagePadding}`,
-        backgroundColor: 'rgba(26, 26, 36, 0.3)',
-      }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: isMobile ? '32px' : '48px' }}>
-            <h2 style={{
-              fontFamily: fonts.display,
-              fontSize: fontSizes.h2,
-              fontWeight: fontWeights.bold,
-              color: colors.snow,
-              marginBottom: '12px',
-            }}>
-              Simple, Transparent Pricing
-            </h2>
-            <p style={{ fontSize: fontSizes.body, color: colors.silver }}>
-              Start free, scale as you grow
-            </p>
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: grid.grid3,
-            gap: isMobile ? '16px' : '24px',
-          }}>
-            {[
-              { name: 'Starter', price: 'Free', period: 'forever', features: ['50 CVs/month', 'Basic AI models', 'Email support'], cta: 'Get Started', highlight: false },
-              { name: 'Professional', price: '$49', period: '/month', features: ['500 CVs/month', 'All AI models', 'Priority support', 'Team collaboration'], cta: 'Start Free Trial', highlight: true },
-              { name: 'Enterprise', price: 'Custom', period: '', features: ['Unlimited CVs', 'Custom AI', 'Dedicated support', 'API access'], cta: 'Contact Sales', highlight: false },
-            ].map((plan, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                viewport={{ once: true, margin: '-50px' }}
-                style={{
-                  padding: isMobile ? '20px' : '32px',
-                  borderRadius: isMobile ? '16px' : '24px',
-                  backgroundColor: plan.highlight ? 'rgba(0, 240, 255, 0.05)' : 'rgba(10, 10, 15, 0.8)',
-                  border: `1px solid ${plan.highlight ? 'rgba(0, 240, 255, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
-                  position: 'relative',
-                }}
-              >
-                {plan.highlight && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '-10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    padding: '4px 12px',
-                    borderRadius: '9999px',
-                    backgroundColor: colors.cyan,
-                    color: colors.void,
-                    fontSize: '11px',
-                    fontWeight: fontWeights.semibold,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    MOST POPULAR
-                  </div>
-                )}
-                <div style={{ marginBottom: isMobile ? '16px' : '24px' }}>
-                  <h3 style={{
-                    fontFamily: fonts.display,
-                    fontSize: isMobile ? '16px' : '20px',
-                    fontWeight: fontWeights.semibold,
-                    color: colors.snow,
-                    marginBottom: '8px',
-                  }}>
-                    {plan.name}
-                  </h3>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <span style={{
-                      fontFamily: fonts.display,
-                      fontSize: isMobile ? '28px' : '36px',
-                      fontWeight: fontWeights.bold,
-                      color: colors.snow,
-                    }}>{plan.price}</span>
-                    <span style={{ fontSize: '13px', color: colors.silver }}>{plan.period}</span>
-                  </div>
-                </div>
-                <ul style={{ listStyle: 'none', padding: 0, marginBottom: isMobile ? '20px' : '32px' }}>
-                  {plan.features.map((feature, j) => (
-                    <li key={j} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                      <CheckCircle style={{ width: 16, height: 16, color: colors.emerald, flexShrink: 0 }} />
-                      <span style={{ fontSize: isMobile ? '13px' : '14px', color: colors.silver }}>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  variant={plan.highlight ? 'primary' : 'secondary'}
-                  fullWidth
-                  onClick={() => setScreen('job')}
-                >
-                  {plan.cta}
-                </Button>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Pricing Section - Hidden for now */}
 
       {/* Final CTA */}
       <section style={{ padding: `${spacing.sectionPaddingY} ${spacing.pagePadding}` }}>

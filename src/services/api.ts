@@ -88,6 +88,21 @@ export interface BatchResponse {
   results: BatchResult[];
 }
 
+export interface CreditsInfo {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  isUnlimited: boolean;
+  isFreeTier: boolean;
+  label: string;
+}
+
+export interface CreditsResponse {
+  success: boolean;
+  credits?: CreditsInfo;
+  error?: string;
+}
+
 // ============================================
 // API Functions
 // ============================================
@@ -124,6 +139,22 @@ export async function getModels(): Promise<ModelsResponse | null> {
   try {
     const response = await fetch(`${API_BASE}/api/models`);
     if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get OpenRouter credits/usage information
+ */
+export async function getCredits(): Promise<CreditsResponse | null> {
+  try {
+    const response = await fetch(`${API_BASE}/api/credits`);
+    if (!response.ok) {
+      const error = await response.json();
+      return { success: false, error: error.error || 'Failed to fetch credits' };
+    }
     return await response.json();
   } catch {
     return null;
@@ -422,6 +453,7 @@ export const api = {
   checkHealth,
   getConfig,
   getModels,
+  getCredits,
   fetchUrl,
   screenCandidate,
   screenBatch,

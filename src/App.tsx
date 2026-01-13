@@ -8,6 +8,7 @@ import {
   ResultsScreen,
   SettingsScreen
 } from './components/screens';
+import { CreditsDisplay } from './components/ui';
 
 function App() {
   const currentScreen = useStore((s) => s.currentScreen);
@@ -33,6 +34,9 @@ function App() {
 
   return (
     <div className="min-h-screen min-h-dvh w-full">
+      {/* Credits display - visible on all screens except landing */}
+      {currentScreen !== 'landing' && <CreditsDisplay />}
+
       <AnimatePresence mode="wait">
         <motion.div
           key={currentScreen}
