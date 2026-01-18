@@ -10,8 +10,15 @@ import {
   Server,
   ChevronDown,
   Sparkles,
-  Brain
+  Brain,
+  FileSearch,
+  Cpu,
+  ShieldCheck,
+  Clock
 } from 'lucide-react';
+
+// Processing stage type for enterprise-grade progress tracking
+type ProcessingStage = 'reading' | 'validating' | 'analyzing' | 'scoring' | 'complete';
 import { Button } from '../ui';
 import { useStore, generateId } from '../../store/useStore';
 import { api, readFileAsText, type AIModel } from '../../services/api';
@@ -34,12 +41,37 @@ export function ScreeningScreen() {
   const [error, setError] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
+  // Enterprise progress tracking - shows exactly what's happening
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>('reading');
+  const [stageStartTime, setStageStartTime] = useState<number>(Date.now());
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+
   // Model selection state
   const [models, setModels] = useState<AIModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('z-ai/glm-4.7');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+
+  // Real-time elapsed time counter
+  useEffect(() => {
+    if (currentSession?.status === 'processing') {
+      const interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - stageStartTime) / 1000));
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [currentSession?.status, stageStartTime]);
+
+  // Stage descriptions for user feedback
+  const stageInfo: Record<ProcessingStage, { label: string; icon: React.ReactNode; color: string }> = {
+    reading: { label: 'Reading Document', icon: <FileSearch style={{ width: 20, height: 20 }} />, color: colors.cyan },
+    validating: { label: 'Validating Content', icon: <ShieldCheck style={{ width: 20, height: 20 }} />, color: colors.violet },
+    analyzing: { label: 'AI Analyzing CV', icon: <Brain style={{ width: 20, height: 20 }} />, color: colors.amber },
+    scoring: { label: 'Calculating Score', icon: <Cpu style={{ width: 20, height: 20 }} />, color: colors.emerald },
+    complete: { label: 'Complete', icon: <CheckCircle style={{ width: 20, height: 20 }} />, color: colors.emerald },
+  };
 
   // Styles
   const pageStyle: CSSProperties = {
@@ -196,11 +228,13 @@ Keep it simple and easy to read. No technical jargon.`;
     init();
   }, []);
 
-  // Process CVs with AI
+  // Process CVs with AI - Enterprise-grade with stage tracking
   const processWithAI = useCallback(async () => {
     if (!currentJob || uploadedCVs.length === 0) return;
 
     setError(null);
+    setCompletedCount(0);
+    setStageStartTime(Date.now());
     updateSession({ status: 'processing' });
 
     const candidates: Candidate[] = [];
@@ -215,8 +249,64 @@ Keep it simple and easy to read. No technical jargon.`;
         });
 
         try {
-          // Read file content
+          // STAGE 1: Reading document
+          setProcessingStage('reading');
+          setStageStartTime(Date.now());
           const cvContent = await readFileAsText(file);
+
+          // STAGE 2: Validating content
+          setProcessingStage('validating');
+          setStageStartTime(Date.now());
+
+          // CHECK FOR PARSE ERROR - Don't send garbage to AI
+          if (cvContent.startsWith('[PARSE_ERROR]')) {
+            console.error(`Document parsing failed for ${file.name}`);
+            candidates.push({
+              id: generateId(),
+              name: file.name.replace(/\.(pdf|doc|docx|txt)$/i, '').replace(/[-_]/g, ' '),
+              fileName: file.name,
+              rawText: cvContent,
+              score: 0,
+              confidence: 0,
+              recommendation: 'pass',
+              summary: `⚠️ DOCUMENT PARSING FAILED - ${cvContent.replace('[PARSE_ERROR] ', '')}`,
+              matchedSkills: [],
+              missingSkills: [],
+              concerns: ['Document could not be parsed - please paste content manually or use a different file format'],
+              interviewQuestions: [],
+              experience: 0,
+              processedAt: new Date()
+            });
+            continue; // Skip AI processing for this file
+          }
+
+          // Validate content quality
+          const validation = api.validateExtractedContent(cvContent, file.name);
+          if (!validation.valid) {
+            console.error(`Content validation failed for ${file.name}: ${validation.reason}`);
+            candidates.push({
+              id: generateId(),
+              name: file.name.replace(/\.(pdf|doc|docx|txt)$/i, '').replace(/[-_]/g, ' '),
+              fileName: file.name,
+              rawText: cvContent,
+              score: 0,
+              confidence: 0,
+              recommendation: 'pass',
+              summary: `⚠️ INSUFFICIENT CONTENT - ${validation.reason}`,
+              matchedSkills: [],
+              missingSkills: [],
+              concerns: [validation.reason || 'Content validation failed'],
+              interviewQuestions: [],
+              experience: 0,
+              processedAt: new Date()
+            });
+            setCompletedCount(prev => prev + 1);
+            continue; // Skip AI processing
+          }
+
+          // STAGE 3: AI Analysis (the main processing stage)
+          setProcessingStage('analyzing');
+          setStageStartTime(Date.now());
 
           // Call backend API with selected model
           const response = await api.screenCandidate(
@@ -225,7 +315,14 @@ Keep it simple and easy to read. No technical jargon.`;
             selectedModel
           );
 
+          // STAGE 4: Scoring and finalizing
+          setProcessingStage('scoring');
+          setStageStartTime(Date.now());
+
           const result = response.result;
+
+          // Check if AI returned a parse error indicator
+          const hasWarning = validation.warning;
 
           const candidate: Candidate = {
             id: generateId(),
@@ -233,31 +330,43 @@ Keep it simple and easy to read. No technical jargon.`;
             fileName: file.name,
             rawText: cvContent,
             score: result.score,
+            confidence: result.confidence,
             recommendation: result.recommendation,
-            summary: result.summary,
-            matchedSkills: result.matchedSkills,
-            missingSkills: result.missingSkills,
-            concerns: result.concerns,
-            interviewQuestions: result.interviewQuestions,
-            experience: result.experienceYears,
+            summary: hasWarning ? `⚠️ ${validation.warning}\n\n${result.summary}` : result.summary,
+            scoreBreakdown: result.scoreBreakdown,
+            matchedSkills: result.matchedSkills || [],
+            missingSkills: result.missingSkills || [],
+            partialMatches: result.partialMatches || [],
+            concerns: hasWarning
+              ? [...(result.concerns || []), validation.warning!]
+              : (result.concerns || []),
+            strengths: result.strengths || [],
+            interviewQuestions: result.interviewQuestions || [],
+            experience: result.experienceYears || 0,
+            skillMatchPercent: result.skillMatchPercent,
+            educationMatch: result.educationMatch,
             processedAt: new Date()
           };
 
           candidates.push(candidate);
+          setCompletedCount(prev => prev + 1);
+          setProcessingStage('complete');
         } catch (err) {
           // If one file fails, continue with others
           console.error(`Failed to process ${file.name}:`, err);
+          setCompletedCount(prev => prev + 1);
           candidates.push({
             id: generateId(),
             name: file.name.replace(/\.(pdf|doc|docx|txt)$/i, '').replace(/[-_]/g, ' '),
             fileName: file.name,
             rawText: '',
             score: 0,
+            confidence: 0,
             recommendation: 'pass',
-            summary: `Failed to process: ${(err as Error).message}`,
+            summary: `⚠️ PROCESSING ERROR - ${(err as Error).message}`,
             matchedSkills: [],
             missingSkills: [],
-            concerns: ['Processing failed'],
+            concerns: ['Processing failed - ' + (err as Error).message],
             interviewQuestions: [],
             experience: 0,
             processedAt: new Date()
@@ -579,112 +688,194 @@ Keep it simple and easy to read. No technical jargon.`;
             </motion.div>
           )}
 
-          {/* Processing State */}
+          {/* Processing State - Enterprise-Grade Progress UI */}
           {currentSession?.status === 'processing' && (
             <motion.div
               key="processing"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              style={cardStyle}
+              style={{ ...cardStyle, maxWidth: '640px' }}
             >
-              {/* Animated Logo */}
-              <div style={logoContainerStyle}>
+              {/* Live Processing Indicator */}
+              <div style={{ marginBottom: spacing[6] }}>
                 <motion.div
                   style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(0, 240, 255, 0.2)',
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: radius.xl,
+                    background: `linear-gradient(135deg, ${stageInfo[processingStage].color}, ${colors.violet})`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto',
+                    position: 'relative',
                   }}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.5, 0.2, 0.5]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: 'easeInOut'
-                  }}
-                />
+                >
+                  {/* Pulse ring animation */}
+                  <motion.div
+                    style={{
+                      position: 'absolute',
+                      inset: -8,
+                      borderRadius: radius.xl,
+                      border: `2px solid ${stageInfo[processingStage].color}`,
+                    }}
+                    animate={{
+                      scale: [1, 1.15, 1],
+                      opacity: [0.5, 0, 0.5]
+                    }}
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: 'easeOut'
+                    }}
+                  />
+                  <motion.div
+                    animate={{ rotate: processingStage === 'analyzing' ? 360 : 0 }}
+                    transition={{ duration: 2, repeat: processingStage === 'analyzing' ? Infinity : 0, ease: 'linear' }}
+                  >
+                    {stageInfo[processingStage].icon}
+                  </motion.div>
+                </motion.div>
+              </div>
+
+              {/* Current Stage Label */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: spacing[2],
+                padding: `${spacing[2]} ${spacing[4]}`,
+                backgroundColor: `${stageInfo[processingStage].color}20`,
+                border: `1px solid ${stageInfo[processingStage].color}40`,
+                borderRadius: radius.full,
+                marginBottom: spacing[4],
+              }}>
                 <motion.div
                   style={{
-                    position: 'absolute',
-                    inset: '8px',
+                    width: 8,
+                    height: 8,
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(0, 240, 255, 0.3)',
+                    backgroundColor: stageInfo[processingStage].color,
                   }}
-                  animate={{
-                    scale: [1, 1.1, 1],
-                    opacity: [0.7, 0.3, 0.7]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: 0.2
-                  }}
+                  animate={{ opacity: [1, 0.3, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
                 />
-                <div style={{
-                  position: 'absolute',
-                  inset: '16px',
-                  borderRadius: '50%',
-                  background: `linear-gradient(135deg, ${colors.cyan}, ${colors.violet})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Zap style={{ width: 32, height: 32, color: colors.void }} />
-                </div>
+                <span style={{ color: stageInfo[processingStage].color, fontSize: fontSizes.sm, fontWeight: fontWeights.semibold }}>
+                  {stageInfo[processingStage].label}
+                </span>
+                <span style={{ color: colors.silver, fontSize: fontSizes.xs, fontFamily: fonts.mono }}>
+                  {elapsedTime}s
+                </span>
               </div>
 
               <h2 style={{ fontFamily: fonts.display, fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.snow, marginBottom: spacing[2] }}>
-                AI Screening in Progress
+                Screening CV {currentIndex + 1} of {uploadedCVs.length}
               </h2>
-              <p style={{ color: colors.silver, fontSize: fontSizes.base, marginBottom: spacing[8] }}>
-                Analyzing {uploadedCVs.length} CVs against job requirements
+              <p style={{ color: colors.silver, fontSize: fontSizes.base, marginBottom: spacing[6], maxWidth: '320px', margin: '0 auto' }}>
+                <span style={{
+                  display: 'block',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  marginBottom: spacing[6]
+                }}>
+                  {currentSession.currentCandidate || 'Processing...'}
+                </span>
               </p>
 
-              {/* Progress Bar */}
-              <div style={progressContainerStyle}>
-                <motion.div
-                  style={{
-                    height: '100%',
-                    background: `linear-gradient(90deg, ${colors.cyan}, ${colors.violet})`,
-                    borderRadius: radius.full,
-                  }}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.5 }}
-                />
+              {/* Progress Bar with Segments */}
+              <div style={{ marginBottom: spacing[4] }}>
+                <div style={progressContainerStyle}>
+                  <motion.div
+                    style={{
+                      height: '100%',
+                      background: `linear-gradient(90deg, ${colors.emerald}, ${colors.cyan}, ${colors.violet})`,
+                      borderRadius: radius.full,
+                    }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: spacing[2], fontSize: fontSizes.xs }}>
+                  <span style={{ color: colors.silver }}>
+                    <Clock style={{ width: 12, height: 12, display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                    {completedCount} completed
+                  </span>
+                  <span style={{ color: colors.cyan, fontFamily: fonts.mono, fontWeight: fontWeights.bold }}>
+                    {progress}%
+                  </span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: fontSizes.sm, marginBottom: spacing[6] }}>
-                <span style={{ color: colors.silver, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-                  Processing: {currentSession.currentCandidate || '...'}
-                </span>
-                <span style={{ color: colors.cyan, fontFamily: fonts.mono, fontWeight: fontWeights.semibold }}>
-                  {progress}%
-                </span>
+              {/* Stage Pipeline Visualization */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: spacing[4],
+                backgroundColor: 'rgba(26, 26, 36, 0.5)',
+                borderRadius: radius.lg,
+                marginBottom: spacing[6],
+              }}>
+                {(['reading', 'validating', 'analyzing', 'scoring'] as ProcessingStage[]).map((stage, idx) => (
+                  <div key={stage} style={{ display: 'flex', alignItems: 'center', gap: spacing[2] }}>
+                    <motion.div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: processingStage === stage
+                          ? stageInfo[stage].color
+                          : (['reading', 'validating', 'analyzing', 'scoring'].indexOf(processingStage) > idx
+                            ? colors.emerald
+                            : colors.graphite),
+                        transition: 'background-color 0.3s',
+                      }}
+                      animate={processingStage === stage ? { scale: [1, 1.1, 1] } : {}}
+                      transition={{ duration: 0.5, repeat: processingStage === stage ? Infinity : 0 }}
+                    >
+                      {(['reading', 'validating', 'analyzing', 'scoring'].indexOf(processingStage) > idx) ? (
+                        <CheckCircle style={{ width: 14, height: 14, color: colors.void }} />
+                      ) : (
+                        <span style={{ fontSize: fontSizes.xs, color: colors.void, fontWeight: fontWeights.bold }}>
+                          {idx + 1}
+                        </span>
+                      )}
+                    </motion.div>
+                    {idx < 3 && (
+                      <div style={{
+                        width: 20,
+                        height: 2,
+                        backgroundColor: (['reading', 'validating', 'analyzing', 'scoring'].indexOf(processingStage) > idx)
+                          ? colors.emerald
+                          : colors.graphite,
+                        transition: 'background-color 0.3s',
+                      }} />
+                    )}
+                  </div>
+                ))}
               </div>
 
-              {/* Stats */}
+              {/* Stats Grid */}
               <div style={statsGridStyle}>
                 <div style={statBoxStyle}>
-                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.snow, fontFamily: fonts.display }}>
-                    {currentIndex + 1}
+                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.emerald, fontFamily: fonts.display }}>
+                    {completedCount}
                   </div>
-                  <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Processed</div>
+                  <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Done</div>
                 </div>
                 <div style={statBoxStyle}>
-                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.snow, fontFamily: fonts.display }}>
-                    {uploadedCVs.length - currentIndex - 1}
+                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.amber, fontFamily: fonts.display }}>
+                    {uploadedCVs.length - completedCount}
                   </div>
                   <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Remaining</div>
                 </div>
                 <div style={statBoxStyle}>
-                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.snow, fontFamily: fonts.display }}>
-                    ~{Math.ceil((uploadedCVs.length - currentIndex) * 3)}s
+                  <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.cyan, fontFamily: fonts.display }}>
+                    ~{Math.max(1, Math.ceil((uploadedCVs.length - completedCount) * 4))}s
                   </div>
                   <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Est. Time</div>
                 </div>

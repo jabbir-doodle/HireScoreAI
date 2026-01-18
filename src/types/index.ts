@@ -26,6 +26,15 @@ export interface JobDescription {
   createdAt: Date;
 }
 
+// Enterprise Score Breakdown (2026 Standard)
+export interface ScoreBreakdown {
+  technicalSkills: number;  // 0-35
+  experience: number;       // 0-25
+  education: number;        // 0-15
+  careerProgression: number; // 0-15
+  communication: number;    // 0-10
+}
+
 export interface Candidate {
   id: string;
   name: string;
@@ -35,13 +44,19 @@ export interface Candidate {
   fileName: string;
   rawText: string;
   score: number;
+  confidence?: number;  // 0-1 confidence level
   recommendation: 'interview' | 'maybe' | 'pass';
   summary: string;
+  scoreBreakdown?: ScoreBreakdown;  // Enterprise score breakdown
   matchedSkills: string[];
   missingSkills: string[];
+  partialMatches?: string[];  // Skills with related but not exact match
   concerns: string[];
+  strengths?: string[];  // Top candidate strengths
   interviewQuestions: string[];
   experience: number;
+  skillMatchPercent?: number;
+  educationMatch?: boolean | 'partial';
   processedAt: Date;
 }
 

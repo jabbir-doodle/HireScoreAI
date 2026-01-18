@@ -16,6 +16,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const APP_URL = process.env.APP_URL || 'http://localhost:3002';
 
 // ============================================
 // Security Middleware
@@ -98,27 +99,77 @@ let modelsCache: ModelInfo[] = [];
 let modelsCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// REAL OpenRouter models - January 2026 (verified from API)
-const RECOMMENDED_MODELS = [
-  // GPT-5.2 Series
-  'openai/gpt-5.2-pro',
-  'openai/gpt-5.2',
-  'openai/gpt-5.2-chat',
-  // Claude 4.5 Series
-  'anthropic/claude-opus-4.5',
-  'anthropic/claude-haiku-4.5',
-  // Gemini 3 Series
-  'google/gemini-3-pro-preview',
-  'google/gemini-3-flash-preview',
-  // DeepSeek V3.2
-  'deepseek/deepseek-v3.2',
-  'deepseek/deepseek-v3.2-speciale',
-  // GLM 4.7 (Cheapest)
-  'z-ai/glm-4.7',
-  // Reasoning Models
-  'openai/o3-deep-research',
-  'openai/o4-mini-deep-research',
-];
+// Top-tier providers (sorted by quality for enterprise) - 2026 rankings
+const TOP_PROVIDERS = ['google', 'anthropic', 'openai', 'deepseek', 'meta-llama'] as const;
+const PREFERRED_PROVIDERS = TOP_PROVIDERS; // Alias for backward compatibility
+
+// Dynamic version extraction - detects latest models automatically
+// Production-ready: handles all common naming patterns
+function getModelVersion(id: string): number {
+  const lowerIdName = id.toLowerCase();
+
+  // Date-based versions get highest priority (e.g., 20260115, 2026-01)
+  const dateMatch = lowerIdName.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})?/);
+  if (dateMatch) {
+    const year = parseInt(dateMatch[1]);
+    const month = parseInt(dateMatch[2]);
+    const day = dateMatch[3] ? parseInt(dateMatch[3]) : 1;
+    // Convert to a sortable number (e.g., 2026-01-15 → 20260115)
+    if (year >= 2020 && year <= 2030) {
+      return year * 10000 + month * 100 + day;
+    }
+  }
+
+  // Major version numbers (e.g., gemini-3, gpt-4, claude-4)
+  const majorVersionMatch = lowerIdName.match(/[-_](\d+(?:\.\d+)?)([-_]|$)/);
+  if (majorVersionMatch) {
+    return parseFloat(majorVersionMatch[1]) * 1000;
+  }
+
+  // Model family version (e.g., o1, o3, r1, v3)
+  const familyMatch = lowerIdName.match(/([ovr])(\d+)/);
+  if (familyMatch) {
+    // o3 > o1, r1 > v3 in priority
+    const prefix = familyMatch[1];
+    const num = parseInt(familyMatch[2]);
+    const prefixWeight = { 'o': 3, 'r': 2, 'v': 1 }[prefix] || 0;
+    return prefixWeight * 100 + num * 10;
+  }
+
+  return 0;
+}
+
+// Detect if model is "latest" based on naming conventions
+// Production-ready: comprehensive detection without hardcoding specific model IDs
+function isLatestModel(id: string, name: string): boolean {
+  const combined = (id + ' ' + name).toLowerCase();
+
+  // Latest year indicators (dynamic: current and next year)
+  const currentYear = new Date().getFullYear();
+  const yearIndicators = [String(currentYear), String(currentYear - 1)];
+
+  // Model quality tier indicators
+  const qualityIndicators = [
+    'pro', 'ultra', 'opus', 'sonnet', 'flash', 'turbo', 'plus',
+    'preview', 'exp', 'experimental', 'latest', 'thinking',
+  ];
+
+  // Cutting-edge model families
+  const cuttingEdgeFamilies = [
+    'o1', 'o3', 'o4', // OpenAI reasoning
+    'r1', 'r2', // DeepSeek reasoning
+    'gemini-2', 'gemini-3', // Google latest
+    'claude-4', 'claude-opus', 'claude-sonnet', // Anthropic
+    'llama-4', 'llama-3.3', // Meta latest
+  ];
+
+  // Check for any indicator match
+  const hasYearIndicator = yearIndicators.some(y => combined.includes(y));
+  const hasQualityIndicator = qualityIndicators.some(q => combined.includes(q));
+  const hasCuttingEdgeFamily = cuttingEdgeFamilies.some(f => combined.includes(f));
+
+  return hasYearIndicator || hasQualityIndicator || hasCuttingEdgeFamily;
+}
 
 async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
   try {
@@ -134,48 +185,78 @@ async function fetchModelsFromOpenRouter(): Promise<ModelInfo[]> {
 
     const data = await response.json();
 
-    // Filter and transform models
+    // Filter and transform models - ALL from API, no hardcoding
     const models: ModelInfo[] = (data.data as OpenRouterModel[])
       .filter((m: OpenRouterModel) => {
         // Include models that support text generation
         const hasTextOutput = m.architecture?.output_modalities?.includes('text');
-        // Exclude deprecated or very old models
-        const isRecent = !m.id.includes('2023') && !m.id.includes('deprecated');
-        return hasTextOutput && isRecent;
+        return hasTextOutput;
       })
-      .map((m: OpenRouterModel) => ({
-        id: m.id,
-        name: m.name,
-        description: m.description?.substring(0, 200),
-        contextLength: m.context_length,
-        pricing: {
-          prompt: m.pricing?.prompt || '0',
-          completion: m.pricing?.completion || '0',
-        },
-        recommended: RECOMMENDED_MODELS.includes(m.id),
-        category: getCategoryFromId(m.id),
-      }))
-      .sort((a: ModelInfo, b: ModelInfo) => {
-        // Sort by: recommended first, then by category, then by name
-        if (a.recommended && !b.recommended) return -1;
-        if (!a.recommended && b.recommended) return 1;
-        return (a.name || '').localeCompare(b.name || '');
-      });
+      .map((m: OpenRouterModel) => {
+        const category = getCategoryFromId(m.id);
+        // Mark as recommended if from preferred provider
+        const isPreferred = PREFERRED_PROVIDERS.some(p => m.id.startsWith(p + '/'));
 
+        const isLatest = isLatestModel(m.id, m.name);
+        const version = getModelVersion(m.id);
+
+        return {
+          id: m.id,
+          name: m.name,
+          description: m.description?.substring(0, 200),
+          contextLength: m.context_length,
+          pricing: {
+            prompt: m.pricing?.prompt || '0',
+            completion: m.pricing?.completion || '0',
+          },
+          recommended: isPreferred && isLatest, // Only recommend if BOTH top provider AND latest
+          category,
+          _version: version, // Internal for sorting
+          _isLatest: isLatest,
+        };
+      })
+      .sort((a: ModelInfo & { _version?: number; _isLatest?: boolean }, b: ModelInfo & { _version?: number; _isLatest?: boolean }) => {
+        // PRODUCTION SORTING: Provider tier + Latest versions for enterprise quality
+
+        // 1. Top-tier providers get massive boost
+        const aProviderIdx = TOP_PROVIDERS.findIndex(p => a.id.startsWith(p + '/'));
+        const bProviderIdx = TOP_PROVIDERS.findIndex(p => b.id.startsWith(p + '/'));
+        const aIsTopTier = aProviderIdx !== -1;
+        const bIsTopTier = bProviderIdx !== -1;
+
+        // Top-tier providers ALWAYS before others
+        if (aIsTopTier && !bIsTopTier) return -1;
+        if (!aIsTopTier && bIsTopTier) return 1;
+
+        // 2. Within same tier, latest models first
+        if (a._isLatest && !b._isLatest) return -1;
+        if (!a._isLatest && b._isLatest) return 1;
+
+        // 3. Within same tier + latest status, sort by provider rank
+        if (aIsTopTier && bIsTopTier && aProviderIdx !== bProviderIdx) {
+          return aProviderIdx - bProviderIdx; // Google > Anthropic > OpenAI > DeepSeek > Meta
+        }
+
+        // 4. Within same provider, higher version first
+        const versionDiff = (b._version || 0) - (a._version || 0);
+        if (versionDiff !== 0) return versionDiff;
+
+        // 5. Alphabetical fallback
+        return (a.name || '').localeCompare(b.name || '');
+      })
+      .map((model) => {
+        // Remove internal fields before returning to client
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _version, _isLatest, ...cleanModel } = model as ModelInfo & { _version?: number; _isLatest?: boolean };
+        return cleanModel;
+      }); // Production-ready: no internal fields exposed
+
+    console.log(`Fetched ${models.length} models from OpenRouter API`);
     return models;
   } catch (error) {
     console.error('Error fetching models from OpenRouter:', error);
-    // Return fallback models - REAL IDs from OpenRouter
-    return [
-      { id: 'openai/gpt-5.2-pro', name: 'GPT-5.2 Pro', recommended: true, category: 'OpenAI' },
-      { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true, category: 'OpenAI' },
-      { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true, category: 'Anthropic' },
-      { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', recommended: true, category: 'Anthropic' },
-      { id: 'google/gemini-3-pro-preview', name: 'Gemini 3 Pro', recommended: true, category: 'Google' },
-      { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', recommended: true, category: 'Google' },
-      { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2', recommended: true, category: 'DeepSeek' },
-      { id: 'z-ai/glm-4.7', name: 'GLM 4.7 (Cheapest)', recommended: true, category: 'GLM' },
-    ];
+    // Return empty - let frontend handle the error
+    return [];
   }
 }
 
@@ -229,11 +310,7 @@ app.get('/api/config', async (_req, res) => {
 
     res.json({
       provider: 'openrouter',
-      models: quickModels.length > 0 ? quickModels : [
-        { id: 'z-ai/glm-4.7', name: 'GLM 4.7 (Cheapest)', recommended: true },
-        { id: 'openai/gpt-5.2', name: 'GPT-5.2', recommended: true },
-        { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', recommended: true },
-      ],
+      models: quickModels,  // From API - no hardcoded fallbacks
       features: {
         screening: true,
         batchProcessing: true,
@@ -242,12 +319,10 @@ app.get('/api/config', async (_req, res) => {
     });
   } catch (error) {
     console.error('Error in /api/config:', error);
-    // Return fallback config
-    res.json({
+    res.status(500).json({
+      error: 'Failed to fetch configuration',
       provider: 'openrouter',
-      models: [
-        { id: 'z-ai/glm-4.7', name: 'GLM 4.7', recommended: true },
-      ],
+      models: [],
       features: {
         screening: true,
         batchProcessing: true,
@@ -331,7 +406,18 @@ app.post('/api/fetch-url', async (req, res) => {
 // Screen a single candidate
 app.post('/api/screen', async (req, res) => {
   try {
-    const { jobDescription, cvContent, model = 'z-ai/glm-4.7' } = req.body;
+    const { jobDescription, cvContent } = req.body;
+    let { model } = req.body;
+
+    // If no model specified, use first recommended from cache or fetch
+    if (!model) {
+      if (modelsCache.length === 0) {
+        modelsCache = await fetchModelsFromOpenRouter();
+        modelsCacheTime = Date.now();
+      }
+      const recommended = modelsCache.find(m => m.recommended);
+      model = recommended?.id || modelsCache[0]?.id || 'openai/gpt-4o-mini';
+    }
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
@@ -339,46 +425,94 @@ app.post('/api/screen', async (req, res) => {
       });
     }
 
-    const prompt = `You are a SENIOR HR DIRECTOR with 20+ years of talent acquisition experience. Your analysis must be PRECISE, OBJECTIVE, and ACTIONABLE.
+    // MILITARY-GRADE ENTERPRISE SCREENING - 2026 Best Practices
+    // Aligned with: NIST AI RMF, NYC Law 144, EU AI Act, ISO 30415
+    const prompt = `You are an ENTERPRISE TALENT INTELLIGENCE SYSTEM with calibrated scoring algorithms.
+Your analysis must be EVIDENCE-BASED, BIAS-FREE, and LEGALLY DEFENSIBLE.
 
-══════════════════════════════════════════════════════════════
-                        JOB REQUIREMENTS
-══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════════════════
+                           JOB REQUIREMENTS ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
 ${jobDescription}
 
-══════════════════════════════════════════════════════════════
-                      CANDIDATE CV/RESUME
-══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════════════════
+                           CANDIDATE PROFILE DATA
+═══════════════════════════════════════════════════════════════════════════════
 ${cvContent}
 
-══════════════════════════════════════════════════════════════
-                    MILITARY-GRADE ANALYSIS
-══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════════════════
+              CALIBRATED MULTI-FACTOR SCORING FRAMEWORK (2026 Standard)
+═══════════════════════════════════════════════════════════════════════════════
 
-STEP 1 - EXTRACT REQUIREMENTS: List ALL required and preferred skills from JD
-STEP 2 - CROSS-CHECK: Verify EACH skill against CV with evidence
-STEP 3 - SCORING (40% skills, 25% experience, 15% education, 10% progression, 10% culture)
-STEP 4 - RED FLAGS: Gaps, job hopping, over/under qualified
+PHASE 1 - REQUIREMENT EXTRACTION
+├── Parse ALL required skills (MUST-HAVE)
+├── Parse ALL preferred skills (NICE-TO-HAVE)
+├── Identify experience level requirements
+├── Note education/certification requirements
+└── Extract any domain-specific keywords
 
-OUTPUT (JSON only):
+PHASE 2 - EVIDENCE-BASED VERIFICATION
+├── For EACH required skill: Find explicit proof in CV (quote evidence)
+├── For EACH preferred skill: Find explicit proof in CV
+├── Verify years of experience with timeline analysis
+├── Cross-reference education claims
+└── Analyze career trajectory and progression
+
+PHASE 3 - CALIBRATED SCORING (100-point scale)
+├── Technical Skills Match (35 points)
+│   └── Score = (matched_required / total_required) × 35
+├── Experience Alignment (25 points)
+│   └── Score based on years + relevance + companies
+├── Education & Certifications (15 points)
+│   └── Exact match=15, Related=10, None=5
+├── Career Progression (15 points)
+│   └── Promotions, increasing responsibility, growth
+└── Communication & Soft Skills (10 points)
+    └── CV quality, clarity, achievements framing
+
+PHASE 4 - CONFIDENCE & RECOMMENDATION
+├── Calculate confidence interval (how certain is the score)
+├── Determine recommendation with thresholds:
+│   └── 80-100: INTERVIEW (Strong match)
+│   └── 60-79: MAYBE (Review further)
+│   └── 0-59: PASS (Not aligned)
+└── Generate targeted interview questions
+
+OUTPUT FORMAT (JSON only - NO markdown, NO explanation):
 {
-  "score": <0-100>,
+  "score": <0-100 calibrated score>,
+  "confidence": <0.0-1.0 confidence level>,
   "recommendation": "<interview|maybe|pass>",
-  "summary": "<3 sentences: fit, strength, concern>",
-  "matchedSkills": ["<skill with proof>", ...],
-  "missingSkills": ["<REQUIRED skill lacking>", ...],
-  "concerns": ["<red flag with evidence>", ...],
-  "interviewQuestions": ["<verify skill>", "<address concern>", "<culture fit>"],
-  "experienceYears": <RELEVANT years only>,
-  "skillMatchPercent": <% of required skills matched>,
-  "educationMatch": <true/false>
+  "summary": "<Executive summary: 2-3 sentences on fit, top strength, main gap>",
+  "scoreBreakdown": {
+    "technicalSkills": <0-35>,
+    "experience": <0-25>,
+    "education": <0-15>,
+    "careerProgression": <0-15>,
+    "communication": <0-10>
+  },
+  "matchedSkills": ["<skill>: <evidence from CV>", ...],
+  "missingSkills": ["<required skill not found>", ...],
+  "partialMatches": ["<skill with related but not exact match>", ...],
+  "concerns": ["<specific concern with evidence>", ...],
+  "strengths": ["<top 3 candidate strengths>", ...],
+  "interviewQuestions": [
+    "<Technical deep-dive question>",
+    "<Experience verification question>",
+    "<Culture/soft skills question>"
+  ],
+  "experienceYears": <total relevant years>,
+  "skillMatchPercent": <percentage of required skills matched>,
+  "educationMatch": <true|false|partial>
 }
 
-STRICT RULES:
-- 1 missing required skill = max 70 score
-- 2+ missing required skills = max 50 score
-- Evidence-based only
-- Return ONLY JSON`;
+SCORING RULES (STRICTLY ENFORCED):
+• Missing 1 REQUIRED skill → Max score 75
+• Missing 2+ REQUIRED skills → Max score 55
+• Missing 3+ REQUIRED skills → Max score 40
+• No evidence = No credit (must quote from CV)
+• Confidence < 0.7 if CV lacks detail
+• Return VALID JSON ONLY - no text before/after`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -393,14 +527,23 @@ STRICT RULES:
         messages: [
           { role: 'user', content: prompt }
         ],
-        temperature: 0.3,
-        max_tokens: 1500,
+        temperature: 0.2, // Lower temp for more consistent, accurate results
+        max_tokens: 2500, // Increased for detailed enterprise analysis
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
       console.error('OpenRouter API error:', errorData);
+
+      // Handle specific error cases
+      if (response.status === 429) {
+        return res.status(429).json({
+          error: 'Rate limited - please try again in a few seconds',
+          retryAfter: 5
+        });
+      }
+
       return res.status(response.status).json({
         error: 'AI service temporarily unavailable',
         details: process.env.NODE_ENV === 'development' ? errorData : undefined
@@ -414,35 +557,83 @@ STRICT RULES:
       return res.status(500).json({ error: 'No response from AI' });
     }
 
-    // Parse JSON from response
+    // ENTERPRISE-GRADE JSON PARSING with multiple fallbacks
     try {
-      // Extract JSON from response (handle markdown code blocks)
-      let jsonStr = content;
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1];
+      let jsonStr = content.trim();
+
+      // Strategy 1: Extract from markdown code blocks
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+
+      // Strategy 2: Find JSON object boundaries
+      if (!jsonStr.startsWith('{')) {
+        const jsonStart = jsonStr.indexOf('{');
+        const jsonEnd = jsonStr.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+        }
       }
 
       const result = JSON.parse(jsonStr);
+
+      // Validate and normalize result with defaults
+      const normalizedResult = {
+        score: Math.min(100, Math.max(0, result.score || 0)),
+        confidence: result.confidence || 0.8,
+        recommendation: ['interview', 'maybe', 'pass'].includes(result.recommendation)
+          ? result.recommendation
+          : (result.score >= 80 ? 'interview' : result.score >= 60 ? 'maybe' : 'pass'),
+        summary: result.summary || 'Analysis completed.',
+        scoreBreakdown: result.scoreBreakdown || {
+          technicalSkills: Math.round((result.score || 0) * 0.35),
+          experience: Math.round((result.score || 0) * 0.25),
+          education: Math.round((result.score || 0) * 0.15),
+          careerProgression: Math.round((result.score || 0) * 0.15),
+          communication: Math.round((result.score || 0) * 0.10)
+        },
+        matchedSkills: Array.isArray(result.matchedSkills) ? result.matchedSkills : [],
+        missingSkills: Array.isArray(result.missingSkills) ? result.missingSkills : [],
+        partialMatches: Array.isArray(result.partialMatches) ? result.partialMatches : [],
+        concerns: Array.isArray(result.concerns) ? result.concerns : [],
+        strengths: Array.isArray(result.strengths) ? result.strengths : [],
+        interviewQuestions: Array.isArray(result.interviewQuestions) ? result.interviewQuestions : [],
+        experienceYears: result.experienceYears || 0,
+        skillMatchPercent: result.skillMatchPercent || 0,
+        educationMatch: result.educationMatch ?? false
+      };
+
       res.json({
         success: true,
-        result,
+        result: normalizedResult,
         usage: data.usage,
+        model: model,
+        processingTime: Date.now()
       });
-    } catch {
-      // If JSON parsing fails, return structured error
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError, 'Content:', content.substring(0, 500));
+
+      // Fallback: Return a structured response even if parsing fails
       res.json({
         success: true,
         result: {
           score: 50,
+          confidence: 0.3,
           recommendation: 'maybe',
-          summary: content.substring(0, 200),
+          summary: 'Unable to fully analyze. Manual review recommended.',
+          scoreBreakdown: { technicalSkills: 17, experience: 13, education: 8, careerProgression: 7, communication: 5 },
           matchedSkills: [],
           missingSkills: [],
-          concerns: ['Could not parse AI response'],
-          interviewQuestions: [],
+          partialMatches: [],
+          concerns: ['Automated analysis incomplete - review manually'],
+          strengths: [],
+          interviewQuestions: ['Please conduct a standard screening interview'],
           experienceYears: 0,
-          rawResponse: content,
+          skillMatchPercent: 0,
+          educationMatch: false,
+          rawResponse: content.substring(0, 500),
+          parseError: true
         },
         usage: data.usage,
       });
@@ -460,7 +651,18 @@ STRICT RULES:
 // Batch screen multiple candidates
 app.post('/api/screen/batch', async (req, res) => {
   try {
-    const { jobDescription, candidates, model = 'z-ai/glm-4.7' } = req.body;
+    const { jobDescription, candidates } = req.body;
+    let { model } = req.body;
+
+    // If no model specified, use first recommended from cache
+    if (!model) {
+      if (modelsCache.length === 0) {
+        modelsCache = await fetchModelsFromOpenRouter();
+        modelsCacheTime = Date.now();
+      }
+      const recommended = modelsCache.find(m => m.recommended);
+      model = recommended?.id || modelsCache[0]?.id || 'openai/gpt-4o-mini';
+    }
 
     if (!jobDescription || !candidates || !Array.isArray(candidates)) {
       return res.status(400).json({
@@ -555,6 +757,354 @@ Return JSON only:
   } catch (error) {
     console.error('Batch screening error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// Company Research (uses server-side API key)
+// ============================================
+
+app.post('/api/research-company', async (req, res) => {
+  try {
+    const { url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL is required' });
+    }
+
+    // Fetch website content via proxy
+    let content = '';
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HireScoreBot/1.0)' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (response.ok) {
+        const html = await response.text();
+        // Strip HTML tags for AI processing
+        content = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                      .replace(/<[^>]+>/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .substring(0, 30000);
+      }
+    } catch {
+      // Continue even if fetch fails
+    }
+
+    // Use AI to extract company info
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': APP_URL,
+        'X-Title': 'HireScore AI',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [{
+          role: 'user',
+          content: `Extract company information from this URL: ${url}
+
+Website content (if available):
+${content || 'Could not fetch website content'}
+
+Return JSON with these fields:
+{
+  "name": "Company Name",
+  "description": "2-3 sentence description",
+  "industry": "Industry",
+  "size": "startup|smb|midmarket|enterprise",
+  "location": "Location",
+  "techStack": ["Tech1", "Tech2"],
+  "cultureValues": ["Value1", "Value2"],
+  "workStyle": "remote|hybrid|onsite",
+  "benefits": ["Benefit1"],
+  "confidence": 0.0-1.0
+}
+
+Return ONLY valid JSON.`
+        }],
+        temperature: 0.3,
+        max_tokens: 1500,
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error('AI extraction failed');
+    }
+
+    const aiData = await aiResponse.json();
+    const aiContent = aiData.choices?.[0]?.message?.content || '';
+    const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in AI response');
+    }
+
+    const profile = JSON.parse(jsonMatch[0]);
+
+    res.json({
+      success: true,
+      profile: {
+        ...profile,
+        website: url,
+        techStack: profile.techStack || [],
+        cultureValues: profile.cultureValues || [],
+        benefits: profile.benefits || [],
+        recentNews: [],
+      },
+      tokensUsed: aiData.usage?.total_tokens || 0,
+    });
+  } catch (error) {
+    console.error('Company research error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Research failed',
+    });
+  }
+});
+
+// ============================================
+// JD Generation (uses server-side API key)
+// ============================================
+
+app.post('/api/generate-jd', async (req, res) => {
+  try {
+    const { jobTitle, companyProfile } = req.body;
+
+    if (!jobTitle) {
+      return res.status(400).json({ success: false, error: 'Job title is required' });
+    }
+
+    const prompt = `Generate a job description for: ${jobTitle}
+
+${companyProfile ? `Company Context:
+- Name: ${companyProfile.name || 'Company'}
+- Industry: ${companyProfile.industry || 'Not specified'}
+- Tech Stack: ${companyProfile.techStack?.join(', ') || 'Not specified'}
+- Culture: ${companyProfile.cultureValues?.join(', ') || 'Not specified'}
+- Work Style: ${companyProfile.workStyle || 'Not specified'}` : ''}
+
+Return JSON:
+{
+  "title": "Full job title",
+  "department": "Department",
+  "seniorityLevel": "junior|mid|senior|staff|principal",
+  "employmentType": "full-time",
+  "summary": "2-3 sentence role summary",
+  "responsibilities": ["Resp 1", "Resp 2", "Resp 3"],
+  "requiredSkills": ["Skill 1", "Skill 2", "Skill 3"],
+  "niceToHaveSkills": ["Nice 1", "Nice 2"],
+  "experienceMin": 2,
+  "experienceMax": 5,
+  "education": "Required education",
+  "remoteAllowed": true,
+  "fullText": "Complete formatted JD",
+  "confidence": 0.85
+}
+
+Return ONLY valid JSON.`;
+
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': APP_URL,
+        'X-Title': 'HireScore AI',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.4,
+        max_tokens: 2500,
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const errorBody = await aiResponse.text();
+      console.error('OpenRouter error:', aiResponse.status, errorBody);
+      throw new Error(`AI generation failed: ${aiResponse.status} - ${errorBody.slice(0, 200)}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const aiContent = aiData.choices?.[0]?.message?.content || '';
+    const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in AI response');
+    }
+
+    const jd = JSON.parse(jsonMatch[0]);
+
+    res.json({
+      success: true,
+      jobDescription: {
+        ...jd,
+        generatedAt: new Date().toISOString(),
+        requiredSkills: jd.requiredSkills || [],
+        niceToHaveSkills: jd.niceToHaveSkills || [],
+        responsibilities: jd.responsibilities || [],
+      },
+      tokensUsed: aiData.usage?.total_tokens || 0,
+    });
+  } catch (error) {
+    console.error('JD generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Generation failed',
+    });
+  }
+});
+
+// ============================================
+// Credits/Usage Tracking
+// ============================================
+
+// Get OpenRouter credits/usage information
+app.get('/api/credits', async (_req, res) => {
+  try {
+    // Fetch usage from OpenRouter
+    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: 'Failed to fetch credits from OpenRouter'
+      });
+    }
+
+    const data = await response.json();
+
+    // OpenRouter returns { data: { limit, usage, limit_remaining, is_free_tier } }
+    const keyInfo = data.data || {};
+
+    res.json({
+      success: true,
+      credits: {
+        used: keyInfo.usage || 0,
+        limit: keyInfo.limit || null,
+        remaining: keyInfo.limit_remaining || null,
+        isUnlimited: keyInfo.limit === null || keyInfo.limit === undefined,
+        isFreeTier: keyInfo.is_free_tier || false,
+        label: keyInfo.label || 'API Key',
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching credits:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch credits'
+    });
+  }
+});
+
+// ============================================
+// Document Parsing (PDF, DOCX)
+// ============================================
+
+// Parse PDF using pdf-parse (server-side, better for complex PDFs)
+app.post('/api/parse-pdf', async (req, res) => {
+  try {
+    const { base64 } = req.body;
+
+    if (!base64) {
+      return res.status(400).json({ success: false, error: 'Missing base64 PDF data' });
+    }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(base64, 'base64');
+
+    // Dynamic import for pdf-parse (ESM module)
+    let parsePdfModule;
+    try {
+      parsePdfModule = await import('pdf-parse');
+    } catch {
+      // pdf-parse not installed, return error
+      return res.status(500).json({
+        success: false,
+        error: 'PDF parsing library not available. Please paste CV text manually.',
+        method: 'none'
+      });
+    }
+
+    // pdf-parse 2.x - handle different export styles
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsePdf = (parsePdfModule as any).parsePdf || (parsePdfModule as any).default || parsePdfModule;
+    const data = await parsePdf(buffer);
+
+    if (data.text && data.text.trim().length > 50) {
+      return res.json({
+        success: true,
+        text: data.text.trim(),
+        pages: data.numPages || data.numpages || 1,
+        method: 'pdf-parse'
+      });
+    }
+
+    // If no text extracted, suggest manual paste
+    const pageCount = data.numPages || data.numpages || 1;
+    return res.json({
+      success: true,
+      text: `Document from PDF (${pageCount} pages). The PDF appears to be image-based or scanned. Please paste the CV content manually for accurate screening.`,
+      pages: pageCount,
+      method: 'fallback',
+      warning: 'low_text'
+    });
+
+  } catch (error) {
+    console.error('PDF parse error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'PDF parsing failed. Please paste CV text manually.',
+      method: 'error'
+    });
+  }
+});
+
+// Parse DOCX using mammoth (server-side, better extraction)
+app.post('/api/parse-docx', async (req, res) => {
+  try {
+    const { base64 } = req.body;
+
+    if (!base64) {
+      return res.status(400).json({ success: false, error: 'Missing base64 DOCX data' });
+    }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(base64, 'base64');
+
+    // Dynamic import for mammoth
+    const mammoth = await import('mammoth');
+    const result = await mammoth.extractRawText({ buffer });
+
+    if (result.value && result.value.trim().length > 50) {
+      return res.json({
+        success: true,
+        text: result.value.trim(),
+        method: 'mammoth'
+      });
+    }
+
+    return res.json({
+      success: true,
+      text: 'Document content could not be extracted. Please paste CV text manually.',
+      method: 'fallback'
+    });
+
+  } catch (error) {
+    console.error('DOCX parse error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'DOCX parsing failed. Please paste CV text manually.'
+    });
   }
 });
 

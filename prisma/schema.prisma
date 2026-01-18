@@ -1,0 +1,447 @@
+// HireScore AI Database Schema
+// Principal Full Stack Engineer Standards
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & ORGANIZATION
+// ============================================
+
+model User {
+  id            String   @id @default(cuid())
+  clerkId       String   @unique
+  email         String   @unique
+  name          String?
+  avatarUrl     String?
+
+  // Subscription
+  plan          Plan     @default(FREE)
+  creditsUsed   Int      @default(0)
+  creditsLimit  Int      @default(50) // 50 free screenings
+
+  // Relations
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  sessions       ScreeningSession[]
+  apiKeys        ApiKey[]
+  usageLogs      UsageLog[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  domain        String?  @unique
+  logoUrl       String?
+
+  // Subscription
+  plan          Plan     @default(FREE)
+  creditsUsed   Int      @default(0)
+  creditsLimit  Int      @default(500)
+
+  // Relations
+  users         User[]
+  sessions      ScreeningSession[]
+  companyProfiles CompanyProfile[]
+  jobDescriptions JobDescription[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([domain])
+}
+
+enum Plan {
+  FREE
+  PRO
+  AGENCY
+  TEAM
+  ENTERPRISE
+}
+
+// ============================================
+// COMPANY RESEARCH
+// ============================================
+
+model CompanyProfile {
+  id            String   @id @default(cuid())
+  url           String   @unique
+
+  // Basic Info
+  name          String
+  description   String   @db.Text
+  industry      String?
+  size          CompanySize?
+  location      String?
+  website       String?
+
+  // Tech & Culture
+  techStack     String[] // ["React", "Python", "AWS"]
+  cultureValues String[] // ["Innovation", "Collaboration"]
+  workStyle     WorkStyle?
+  benefits      String[]
+
+  // Metadata
+  logoUrl       String?
+  linkedinUrl   String?
+  glassdoorUrl  String?
+
+  // Recent News (JSON)
+  recentNews    Json?    // [{title, date, summary}]
+
+  // Cache control
+  lastScrapedAt DateTime @default(now())
+  confidence    Float    @default(0.8) // AI confidence score
+
+  // Relations
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  jobDescriptions JobDescription[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([url])
+  @@index([name])
+}
+
+enum CompanySize {
+  STARTUP      // 1-50
+  SMB          // 51-200
+  MIDMARKET    // 201-1000
+  ENTERPRISE   // 1001+
+}
+
+enum WorkStyle {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+// ============================================
+// JOB DESCRIPTIONS
+// ============================================
+
+model JobDescription {
+  id            String   @id @default(cuid())
+
+  // Basic Info
+  title         String
+  department    String?
+  seniorityLevel String?
+  employmentType EmploymentType @default(FULL_TIME)
+
+  // Content
+  summary       String   @db.Text
+  responsibilities String[]
+  requiredSkills String[]
+  niceToHaveSkills String[]
+
+  // Requirements
+  experienceMin Int?
+  experienceMax Int?
+  education     String?
+
+  // Compensation
+  salaryMin     Int?
+  salaryMax     Int?
+  salaryCurrency String?  @default("USD")
+
+  // Location
+  location      String?
+  remoteAllowed Boolean  @default(false)
+
+  // Full text (for matching)
+  rawText       String   @db.Text
+
+  // AI metadata
+  generatedByAI Boolean  @default(false)
+  aiConfidence  Float?
+
+  // Relations
+  companyProfileId String?
+  companyProfile   CompanyProfile? @relation(fields: [companyProfileId], references: [id])
+  organizationId   String?
+  organization     Organization?   @relation(fields: [organizationId], references: [id])
+  sessions         ScreeningSession[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([title])
+  @@index([companyProfileId])
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+// ============================================
+// SCREENING SESSIONS
+// ============================================
+
+model ScreeningSession {
+  id            String   @id @default(cuid())
+
+  // Status
+  status        SessionStatus @default(PENDING)
+  progress      Int           @default(0) // 0-100
+
+  // Configuration
+  modelUsed     String        @default("claude-3-5-haiku")
+  useGraphRAG   Boolean       @default(true)
+  useSemanticMatch Boolean    @default(true)
+
+  // Stats
+  totalCandidates Int         @default(0)
+  processedCount  Int         @default(0)
+
+  // Cost tracking
+  tokensUsed    Int           @default(0)
+  costUsd       Float         @default(0)
+
+  // Relations
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  organizationId String?
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  jobDescriptionId String
+  jobDescription JobDescription @relation(fields: [jobDescriptionId], references: [id])
+  candidates    Candidate[]
+
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum SessionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// CANDIDATES
+// ============================================
+
+model Candidate {
+  id            String   @id @default(cuid())
+
+  // Basic Info
+  name          String
+  email         String?
+  phone         String?
+  linkedinUrl   String?
+
+  // Source
+  fileName      String
+  fileType      String   // pdf, docx, txt
+  fileSize      Int      // bytes
+
+  // Parsed Content
+  rawText       String   @db.Text
+  parsedData    Json?    // Structured resume data
+
+  // Scoring
+  score         Int      // 0-100
+  recommendation Recommendation
+  confidence    Float    @default(0.8)
+
+  // Breakdown (JSON)
+  scoreBreakdown Json?   // {skillMatch, experience, education, culture}
+
+  // Skills Analysis
+  matchedSkills String[]
+  missingSkills String[]
+  transferableSkills String[] // Graph RAG detected
+
+  // AI Analysis
+  summary       String?  @db.Text
+  strengths     String[]
+  concerns      String[]
+  interviewQuestions String[]
+
+  // Experience
+  totalExperience Int?   // years
+  relevantExperience Int? // years
+
+  // Ranking
+  rank          Int?
+
+  // Flags
+  needsHumanReview Boolean @default(false)
+  reviewReason     String?
+
+  // Relations
+  sessionId     String
+  session       ScreeningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  processedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([score])
+  @@index([recommendation])
+}
+
+enum Recommendation {
+  INTERVIEW
+  MAYBE
+  PASS
+}
+
+// ============================================
+// SKILLS GRAPH (for RAG)
+// ============================================
+
+model Skill {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  normalizedName String  // lowercase, no spaces
+
+  category      SkillCategory
+  aliases       String[] // ["JS", "Javascript", "ECMAScript"]
+
+  // Graph relations stored as JSON for simplicity
+  relatedSkills Json?    // [{skillId, relationship, weight}]
+
+  // Embeddings stored in Pinecone, reference here
+  embeddingId   String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([normalizedName])
+  @@index([category])
+}
+
+enum SkillCategory {
+  TECHNICAL
+  SOFT
+  DOMAIN
+  TOOL
+  LANGUAGE
+  FRAMEWORK
+  PLATFORM
+}
+
+// ============================================
+// API & USAGE
+// ============================================
+
+model ApiKey {
+  id            String   @id @default(cuid())
+  key           String   @unique // hashed
+  name          String
+
+  // Permissions
+  scopes        String[] // ["read", "write", "admin"]
+
+  // Usage limits
+  rateLimit     Int      @default(100) // per minute
+
+  // Relations
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([key])
+  @@index([userId])
+}
+
+model UsageLog {
+  id            String   @id @default(cuid())
+
+  // Action
+  action        String   // "company_research", "jd_generate", "screen_resume"
+
+  // Resource
+  resourceType  String?  // "session", "candidate", "company"
+  resourceId    String?
+
+  // Cost
+  tokensUsed    Int      @default(0)
+  costUsd       Float    @default(0)
+
+  // Metadata
+  metadata      Json?
+
+  // Relations
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model Integration {
+  id            String   @id @default(cuid())
+
+  type          IntegrationType
+  name          String
+
+  // OAuth tokens (encrypted)
+  accessToken   String?  @db.Text
+  refreshToken  String?  @db.Text
+  tokenExpiry   DateTime?
+
+  // Webhook config
+  webhookUrl    String?
+  webhookSecret String?
+
+  // Status
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+
+  // Metadata
+  settings      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([type])
+}
+
+enum IntegrationType {
+  GREENHOUSE
+  LEVER
+  WORKDAY
+  SMARTRECRUITERS
+  ASHBY
+  LINKEDIN
+  INDEED
+  CUSTOM_WEBHOOK
+}

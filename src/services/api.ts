@@ -385,6 +385,54 @@ export async function parsePdf(file: File): Promise<string> {
 }
 
 /**
+ * Validate if extracted content looks like actual CV/resume content
+ * Returns { valid: boolean, reason?: string }
+ */
+export function validateExtractedContent(content: string, fileName: string): { valid: boolean; reason?: string; warning?: string } {
+  const trimmed = content.trim();
+
+  // Check for error messages that indicate parsing failed
+  const errorPatterns = [
+    /PDF parsing encountered/i,
+    /Please paste content manually/i,
+    /document parsing limited/i,
+    /appears to be scanned/i,
+    /parsing failed/i,
+    /could not be extracted/i,
+  ];
+
+  for (const pattern of errorPatterns) {
+    if (pattern.test(trimmed)) {
+      return { valid: false, reason: `Document parsing failed for ${fileName}. Please paste the content manually.` };
+    }
+  }
+
+  // Check minimum content length (a real CV should have at least 200 chars)
+  if (trimmed.length < 200) {
+    return { valid: false, reason: `Insufficient content extracted from ${fileName} (${trimmed.length} chars). Please paste the CV content manually.` };
+  }
+
+  // Check for CV-like content indicators
+  const cvIndicators = [
+    /experience|work|employment|job|position/i,
+    /skill|technolog|proficient|expert/i,
+    /education|degree|university|college|school/i,
+    /email|phone|contact|address/i,
+  ];
+
+  const matchedIndicators = cvIndicators.filter(pattern => pattern.test(trimmed)).length;
+
+  if (matchedIndicators < 2) {
+    return {
+      valid: true,
+      warning: `Content from ${fileName} may not be a complete CV. Only ${matchedIndicators}/4 CV indicators found. Results may be inaccurate.`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Read file content as text (handles PDF, DOC, TXT)
  */
 export async function readFileAsText(file: File): Promise<string> {
@@ -399,41 +447,71 @@ export async function readFileAsText(file: File): Promise<string> {
         console.log(`PDF parsed: ${text.length} characters extracted from ${file.name}`);
         return text;
       }
-      // If truly empty, return a message that won't trigger the "[PDF File:" check
+      // If truly empty, return error indicator
       console.warn('PDF has no extractable text - likely scanned document');
-      return `Resume from ${file.name} - This PDF appears to be scanned or image-based. Extracted content may be limited. Please verify or paste content manually if screening fails.`;
+      return `[PARSE_ERROR] Resume from ${file.name} - This PDF appears to be scanned or image-based. Please paste the CV content manually for accurate screening.`;
     } catch (error) {
       console.error('PDF parsing error:', error);
-      // Return generic message instead of "[PDF File:" which triggers rejection
-      return `Resume from ${file.name} - PDF parsing encountered an issue. The document may be protected or corrupted. Please try pasting the content manually.`;
+      return `[PARSE_ERROR] Resume from ${file.name} - PDF parsing failed. The document may be protected or corrupted. Please paste the content manually.`;
     }
   }
 
-  // Handle Word documents (basic extraction)
+  // Handle Word documents using server-side mammoth for better extraction
   if (ext === 'doc' || ext === 'docx') {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        // Basic text extraction from docx (XML-based)
-        if (ext === 'docx') {
-          // Try to extract text from docx XML
-          const text = content
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-          if (text.length > 100) {
-            resolve(text);
-          } else {
-            resolve(`[Word Document: ${file.name}]\n\nPlease copy and paste the CV content manually for best results.`);
-          }
-        } else {
-          resolve(content);
+    try {
+      // Read file as ArrayBuffer for server-side processing
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsArrayBuffer(file);
+      });
+
+      // Convert to base64 for server
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ''
+        )
+      );
+
+      // Try server-side parsing with mammoth
+      const response = await fetch(`${API_BASE}/api/parse-docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64 }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.text && data.text.length > 50) {
+          console.log(`[DOCX] Server parsed: ${data.text.length} chars from ${file.name}`);
+          return data.text;
         }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
+      }
+
+      // Fallback: basic XML extraction for docx
+      const textContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+      });
+
+      const text = textContent
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (text.length > 100) {
+        return text;
+      }
+
+      return `[PARSE_ERROR] Resume from ${file.name} - Word document parsing limited. Please paste content manually for accurate screening.`;
+    } catch (error) {
+      console.error('DOCX parsing error:', error);
+      return `[PARSE_ERROR] Resume from ${file.name} - Document parsing failed. Please paste content manually.`;
+    }
   }
 
   // Handle text files
@@ -459,6 +537,7 @@ export const api = {
   screenBatch,
   readFileAsText,
   parsePdf,
+  validateExtractedContent,
   baseUrl: API_BASE,
 };
 

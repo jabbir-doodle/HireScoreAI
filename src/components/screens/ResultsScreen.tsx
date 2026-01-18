@@ -26,7 +26,9 @@ import {
   Mail,
   SortDesc,
   Eye,
-  Calendar
+  Calendar,
+  GraduationCap,
+  Shield
 } from 'lucide-react';
 import { Button } from '../ui';
 import { useStore } from '../../store/useStore';
@@ -35,26 +37,40 @@ import type { Candidate } from '../../types';
 import type { CSSProperties } from 'react';
 
 // ============================================
-// Score Breakdown Categories
+// Score Breakdown Categories (Enterprise 2026)
 // ============================================
 interface ScoreCategory {
   name: string;
   score: number;
-  weight: number;
+  maxScore: number;
+  percentage: number;
   icon: typeof Brain;
   color: string;
 }
 
 const generateScoreBreakdown = (candidate: Candidate): ScoreCategory[] => {
-  const baseScore = candidate.score;
-  const variance = () => Math.floor(Math.random() * 15) - 7;
+  // Use actual scoreBreakdown from AI if available, otherwise estimate from total score
+  const breakdown = candidate.scoreBreakdown;
 
+  if (breakdown) {
+    // Convert actual breakdown to display format
+    return [
+      { name: 'Technical Skills', score: breakdown.technicalSkills, maxScore: 35, percentage: Math.round((breakdown.technicalSkills / 35) * 100), icon: Brain, color: colors.cyan },
+      { name: 'Experience', score: breakdown.experience, maxScore: 25, percentage: Math.round((breakdown.experience / 25) * 100), icon: Briefcase, color: colors.violet },
+      { name: 'Education', score: breakdown.education, maxScore: 15, percentage: Math.round((breakdown.education / 15) * 100), icon: GraduationCap, color: colors.coral },
+      { name: 'Career Growth', score: breakdown.careerProgression, maxScore: 15, percentage: Math.round((breakdown.careerProgression / 15) * 100), icon: TrendingUp, color: colors.emerald },
+      { name: 'Communication', score: breakdown.communication, maxScore: 10, percentage: Math.round((breakdown.communication / 10) * 100), icon: MessageSquare, color: colors.amber },
+    ];
+  }
+
+  // Fallback: Estimate breakdown from total score
+  const baseScore = candidate.score;
   return [
-    { name: 'Technical Skills', score: Math.min(100, Math.max(0, baseScore + variance())), weight: 30, icon: Brain, color: colors.cyan },
-    { name: 'Experience Match', score: Math.min(100, Math.max(0, baseScore + variance())), weight: 25, icon: Briefcase, color: colors.violet },
-    { name: 'Culture Fit', score: Math.min(100, Math.max(0, baseScore + variance() + 5)), weight: 20, icon: Heart, color: colors.coral },
-    { name: 'Growth Potential', score: Math.min(100, Math.max(0, baseScore + variance() + 3)), weight: 15, icon: TrendingUp, color: colors.emerald },
-    { name: 'Communication', score: Math.min(100, Math.max(0, baseScore + variance() + 2)), weight: 10, icon: MessageSquare, color: colors.amber },
+    { name: 'Technical Skills', score: Math.round(baseScore * 0.35), maxScore: 35, percentage: baseScore, icon: Brain, color: colors.cyan },
+    { name: 'Experience', score: Math.round(baseScore * 0.25), maxScore: 25, percentage: baseScore, icon: Briefcase, color: colors.violet },
+    { name: 'Education', score: Math.round(baseScore * 0.15), maxScore: 15, percentage: baseScore, icon: GraduationCap, color: colors.coral },
+    { name: 'Career Growth', score: Math.round(baseScore * 0.15), maxScore: 15, percentage: baseScore, icon: TrendingUp, color: colors.emerald },
+    { name: 'Communication', score: Math.round(baseScore * 0.10), maxScore: 10, percentage: baseScore, icon: MessageSquare, color: colors.amber },
   ];
 };
 
@@ -932,6 +948,22 @@ export function ResultsScreen() {
                                   {recStyle.label}
                                 </span>
                               </div>
+                              {selectedCandidate.confidence && (
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: spacing[1],
+                                  padding: `${spacing[1]} ${spacing[3]}`,
+                                  borderRadius: radius.full,
+                                  backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                  border: '1px solid rgba(0, 240, 255, 0.2)',
+                                }}>
+                                  <Shield style={{ width: 12, height: 12, color: colors.cyan }} />
+                                  <span style={{ fontSize: fontSizes.xs, fontWeight: fontWeights.medium, color: colors.cyan }}>
+                                    {Math.round(selectedCandidate.confidence * 100)}% confidence
+                                  </span>
+                                </div>
+                              )}
                               <span style={{ fontSize: fontSizes.sm, color: colors.silver }}>
                                 {selectedCandidate.experience || 0} years experience
                               </span>
@@ -995,19 +1027,19 @@ export function ResultsScreen() {
                                   <span style={{ fontSize: fontSizes.sm, color: colors.snow }}>{category.name}</span>
                                 </div>
                                 <span style={{ fontSize: fontSizes.sm, fontWeight: fontWeights.semibold, color: category.color }}>
-                                  {category.score}
+                                  {category.score}/{category.maxScore}
                                 </span>
                               </div>
                               <div style={{ height: '6px', backgroundColor: colors.graphite, borderRadius: radius.full, overflow: 'hidden' }}>
                                 <motion.div
                                   style={{ height: '100%', backgroundColor: category.color, borderRadius: radius.full }}
                                   initial={{ width: 0 }}
-                                  animate={{ width: `${category.score}%` }}
+                                  animate={{ width: `${category.percentage}%` }}
                                   transition={{ duration: 0.8, delay: i * 0.1 }}
                                 />
                               </div>
                               <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginTop: spacing[1] }}>
-                                Weight: {category.weight}%
+                                {category.percentage}% match
                               </div>
                             </div>
                           ))}
