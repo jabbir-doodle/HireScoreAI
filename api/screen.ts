@@ -295,12 +295,20 @@ function processAIResponse(data: any, res: VercelResponse) {
       jsonStr = jsonStr.substring(0, jsonEndIndex + 1);
     }
 
-    // Clean up common issues
+    // Clean up common JSON issues (2026 robust parsing)
     jsonStr = jsonStr
       .replace(/,\s*}/g, '}')  // Remove trailing commas before }
       .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
       .replace(/[\x00-\x1F\x7F]/g, ' ') // Remove control characters
-      .replace(/\n\s*\n/g, '\n'); // Remove empty lines
+      .replace(/\n\s*\n/g, '\n') // Remove empty lines
+      // Fix unescaped newlines inside strings (common AI issue)
+      .replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+      })
+      // Fix single quotes used instead of double quotes for keys
+      .replace(/(\{|\,)\s*'([^']+)'\s*:/g, '$1"$2":')
+      // Fix unquoted string values for known fields
+      .replace(/"recommendation"\s*:\s*(interview|maybe|pass)(?=[,\}])/gi, '"recommendation":"$1"');
 
     const result = JSON.parse(jsonStr);
 
@@ -366,17 +374,37 @@ function processAIResponse(data: any, res: VercelResponse) {
 
     // Enterprise: Try to extract partial data before failing
     try {
-      // Attempt to extract at least a score from the response
+      // Attempt to extract fields using regex patterns
       const scoreMatch = content.match(/"score"\s*:\s*(\d+)/);
-      const recMatch = content.match(/"recommendation"\s*:\s*"(interview|maybe|pass)"/);
-      const summaryMatch = content.match(/"summary"\s*:\s*"([^"]+)"/);
+      const recMatch = content.match(/"recommendation"\s*:\s*"(interview|maybe|pass)"/i);
+      const summaryMatch = content.match(/"summary"\s*:\s*"([^"]{10,500})"/);
+
+      // Extract arrays using regex
+      const extractArray = (fieldName: string): string[] => {
+        const arrayMatch = content.match(new RegExp(`"${fieldName}"\\s*:\\s*\\[([^\\]]{0,2000})\\]`));
+        if (arrayMatch) {
+          const items = arrayMatch[1].match(/"([^"]+)"/g);
+          return items ? items.map(s => s.replace(/"/g, '')) : [];
+        }
+        return [];
+      };
+
+      const matchedSkills = extractArray('matchedSkills');
+      const missingSkills = extractArray('missingSkills');
+      const strengths = extractArray('strengths');
+      const concerns = extractArray('concerns');
+      const interviewQuestions = extractArray('interviewQuestions');
+
+      // Extract experience years
+      const expMatch = content.match(/"experienceYears"\s*:\s*(\d+)/);
+      const experienceYears = expMatch ? parseInt(expMatch[1], 10) : 0;
 
       if (scoreMatch) {
         const fallbackScore = parseInt(scoreMatch[1], 10);
-        const fallbackRec = recMatch?.[1] as 'interview' | 'maybe' | 'pass' ||
+        const fallbackRec = recMatch?.[1]?.toLowerCase() as 'interview' | 'maybe' | 'pass' ||
           (fallbackScore >= 70 ? 'interview' : fallbackScore >= 50 ? 'maybe' : 'pass');
 
-        console.log('Recovered partial data: score=' + fallbackScore);
+        console.log(`[Recovery] Extracted: score=${fallbackScore}, skills=${matchedSkills.length}, strengths=${strengths.length}`);
 
         return res.json({
           success: true,
@@ -384,16 +412,17 @@ function processAIResponse(data: any, res: VercelResponse) {
             score: Math.min(100, Math.max(0, fallbackScore)),
             recommendation: fallbackRec,
             summary: summaryMatch?.[1] || 'Analysis completed with partial data extraction.',
-            matchedSkills: [],
-            missingSkills: [],
-            concerns: ['Note: Some analysis details could not be extracted'],
-            interviewQuestions: [],
-            experienceYears: 0,
-            confidence: 0.5,
-            confidenceReason: 'Partial data extraction due to response format issue',
+            matchedSkills: matchedSkills.length > 0 ? matchedSkills : [],
+            missingSkills: missingSkills.length > 0 ? missingSkills : [],
+            concerns: concerns.length > 0 ? concerns : [],
+            strengths: strengths.length > 0 ? strengths : (matchedSkills.length > 0 ? matchedSkills.slice(0, 3) : []),
+            interviewQuestions: interviewQuestions.length > 0 ? interviewQuestions : [],
+            experienceYears,
+            confidence: 0.6,
+            confidenceReason: 'Partial data extraction - some formatting issues in AI response',
           },
           usage: data.usage,
-          warning: 'Partial data extracted - some fields may be missing',
+          warning: 'Partial data extracted - some fields may be incomplete',
         });
       }
     } catch (recoveryError) {

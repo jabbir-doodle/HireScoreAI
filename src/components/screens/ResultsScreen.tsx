@@ -1258,21 +1258,32 @@ export function ResultsScreen() {
                             Strengths (Why Hire)
                           </h4>
 
-                          {/* Key Strengths from AI */}
-                          {selectedCandidate.strengths && selectedCandidate.strengths.length > 0 && (
-                            <div style={{ marginBottom: spacing[4] }}>
-                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Key Achievements
+                          {/* Key Strengths from AI (fallback to top matched skills) */}
+                          {(() => {
+                            // Use strengths if available, otherwise use top 3-5 matched skills as achievements
+                            const achievements = (selectedCandidate.strengths && selectedCandidate.strengths.length > 0)
+                              ? selectedCandidate.strengths
+                              : (selectedCandidate.matchedSkills.length > 0
+                                ? selectedCandidate.matchedSkills.slice(0, 5).map(s => `Demonstrated ${s} experience`)
+                                : []);
+
+                            if (achievements.length === 0) return null;
+
+                            return (
+                              <div style={{ marginBottom: spacing[4] }}>
+                                <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                  Key Achievements
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
+                                  {achievements.map((strength, i) => (
+                                    <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
+                                      {strength}
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
-                              <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
-                                {selectedCandidate.strengths.map((strength, i) => (
-                                  <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
-                                    {strength}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+                            );
+                          })()}
 
                           {/* Matched Skills */}
                           {selectedCandidate.matchedSkills.length > 0 && (
@@ -1327,7 +1338,11 @@ export function ResultsScreen() {
                           )}
 
                           {selectedCandidate.matchedSkills.length === 0 && (!selectedCandidate.strengths || selectedCandidate.strengths.length === 0) && (
-                            <p style={{ color: colors.silver, fontSize: fontSizes.sm, margin: 0 }}>No specific strengths identified</p>
+                            <div style={{ padding: spacing[3], backgroundColor: 'rgba(255, 170, 0, 0.08)', borderRadius: radius.lg, border: '1px solid rgba(255, 170, 0, 0.2)' }}>
+                              <p style={{ color: colors.amber, fontSize: fontSizes.sm, margin: 0 }}>
+                                ⚠️ No skills matched - CV may not align with job requirements or parsing failed
+                              </p>
+                            </div>
                           )}
                         </div>
 
