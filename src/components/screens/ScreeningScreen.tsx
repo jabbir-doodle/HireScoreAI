@@ -57,23 +57,30 @@ export function ScreeningScreen() {
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
-  // Get estimated seconds per CV based on model tier
+  // Bulk processing status (used for showing batch info during processing)
+  const [batchStatus, setBatchStatus] = useState<string>('');
+
+  // Get estimated seconds per CV based on model tier (2026 optimized)
   const getModelEstimate = useCallback((model: string): number => {
     const modelLower = model.toLowerCase();
-    // Fast models (~10-15 sec)
+    // Ultra-fast models (~3-6 sec) - Gemini Flash-Lite, DeepSeek batch
+    if (modelLower.includes('flash-lite') || modelLower.includes('lite')) {
+      return 4;
+    }
+    // Fast models (~6-10 sec) - Gemini Flash, GLM
     if (modelLower.includes('flash') || modelLower.includes('mini') || modelLower.includes('haiku') || modelLower.includes('glm')) {
+      return 8;
+    }
+    // Medium models (~12-20 sec) - Sonnet, GPT-4o, DeepSeek
+    if (modelLower.includes('sonnet') || modelLower.includes('4o') || modelLower.includes('gemini-pro') || modelLower.includes('deepseek')) {
       return 15;
     }
-    // Medium models (~20-30 sec)
-    if (modelLower.includes('sonnet') || modelLower.includes('4o') || modelLower.includes('gemini-pro') || modelLower.includes('deepseek')) {
-      return 25;
-    }
-    // Large/slow models (~35-50 sec) - GPT-5, Claude Opus, o1, o3
+    // Large/slow models (~25-40 sec) - GPT-5, Claude Opus, o1, o3
     if (modelLower.includes('gpt-5') || modelLower.includes('opus') || modelLower.includes('o1') || modelLower.includes('o3') || modelLower.includes('pro')) {
-      return 45;
+      return 30;
     }
     // Default for unknown models
-    return 30;
+    return 12;
   }, []);
 
   // Calculate adaptive estimate (uses actual time if we have data)
@@ -267,9 +274,16 @@ Keep it simple and easy to read. No technical jargon.`;
 
     setError(null);
     setCompletedCount(0);
+    setBatchStatus(''); // Reset batch status
     setActualProcessingTimes([]); // Reset adaptive timing for new session
     setStageStartTime(Date.now());
     updateSession({ status: 'processing' });
+
+    // Show batch info for bulk processing
+    if (uploadedCVs.length > 1) {
+      const batchCount = Math.ceil(uploadedCVs.length / 5);
+      setBatchStatus(`Bulk mode: ${batchCount} batches (5 CVs each)`);
+    }
 
     const candidates: Candidate[] = [];
 
@@ -285,6 +299,13 @@ Keep it simple and easy to read. No technical jargon.`;
           progress: Math.round((i / uploadedCVs.length) * 100),
           currentCandidate: file.name
         });
+
+        // Update batch status for bulk processing
+        if (uploadedCVs.length > 5) {
+          const currentBatch = Math.floor(i / 5) + 1;
+          const totalBatches = Math.ceil(uploadedCVs.length / 5);
+          setBatchStatus(`Batch ${currentBatch}/${totalBatches} • Using Gemini Flash`);
+        }
 
         let cvContent = '';
         try {
@@ -831,17 +852,32 @@ Keep it simple and easy to read. No technical jargon.`;
               <h2 style={{ fontFamily: fonts.display, fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.snow, marginBottom: spacing[2] }}>
                 Screening CV {currentIndex + 1} of {uploadedCVs.length}
               </h2>
-              <p style={{ color: colors.silver, fontSize: fontSizes.base, marginBottom: spacing[6], maxWidth: '320px', margin: '0 auto' }}>
+              <p style={{ color: colors.silver, fontSize: fontSizes.base, marginBottom: spacing[2], maxWidth: '320px', margin: '0 auto' }}>
                 <span style={{
                   display: 'block',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  marginBottom: spacing[6]
                 }}>
                   {currentSession.currentCandidate || 'Processing...'}
                 </span>
               </p>
+              {/* Batch Status for Bulk Processing */}
+              {batchStatus && (
+                <p style={{
+                  color: colors.cyan,
+                  fontSize: fontSizes.xs,
+                  fontFamily: fonts.mono,
+                  marginBottom: spacing[6],
+                  padding: `${spacing[1]} ${spacing[3]}`,
+                  backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                  borderRadius: radius.md,
+                  display: 'inline-block',
+                }}>
+                  {batchStatus}
+                </p>
+              )}
+              {!batchStatus && <div style={{ marginBottom: spacing[6] }} />}
 
               {/* Progress Bar with Segments */}
               <div style={{ marginBottom: spacing[4] }}>

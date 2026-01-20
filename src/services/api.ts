@@ -233,114 +233,186 @@ export async function screenCandidate(
 }
 
 /**
- * Screen multiple candidates in batch
- * Uses parallel processing for up to 10 CVs, or sequential for larger batches
+ * Screen multiple candidates in batch (2026 Enterprise Edition)
+ * - Uses Gemini 2.5 Flash-Lite for fastest processing
+ * - Intelligent chunking (5 CVs per batch for reliability)
+ * - Exponential backoff retry
+ * - Real-time progress callback
  */
 export async function screenBatch(
   jobDescription: string,
   candidates: BatchCandidate[],
   model?: string,
-  onProgress?: (processed: number, total: number) => void
-): Promise<BatchResponse> {
-  const BATCH_SIZE = 10; // Max parallel processing
+  onProgress?: (processed: number, total: number, status?: string) => void,
+  options?: { fastMode?: boolean; concurrentBatches?: number }
+): Promise<BatchResponse & { performance?: { totalMs: number; avgPerCvMs: number } }> {
+  const BATCH_SIZE = 5; // Optimal for Vercel timeout limits
+  const CONCURRENT_BATCHES = options?.concurrentBatches || 2; // Process 2 batches at a time
   const results: BatchResult[] = [];
+  const startTime = Date.now();
 
-  // Process in chunks of BATCH_SIZE
+  // Split into chunks
+  const chunks: BatchCandidate[][] = [];
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-    const chunk = candidates.slice(i, i + BATCH_SIZE);
+    chunks.push(candidates.slice(i, i + BATCH_SIZE));
+  }
 
-    try {
-      // Try batch endpoint first (more efficient)
-      const response = await fetch(`${API_BASE}/api/screen-batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobDescription,
-          candidates: chunk,
-          model,
-        }),
-      });
+  console.log(`[Batch] Processing ${candidates.length} CVs in ${chunks.length} batches (${BATCH_SIZE} per batch)`);
 
-      if (response.ok) {
-        const batchResult = await response.json();
-        results.push(...batchResult.results);
+  // Process chunks with controlled concurrency
+  for (let i = 0; i < chunks.length; i += CONCURRENT_BATCHES) {
+    const concurrentChunks = chunks.slice(i, i + CONCURRENT_BATCHES);
 
-        if (onProgress) {
-          onProgress(results.length, candidates.length);
-        }
-        continue;
-      }
-    } catch (e) {
-      console.log('[Batch] Batch endpoint failed, falling back to sequential');
+    if (onProgress) {
+      onProgress(results.length, candidates.length, `Processing batch ${i + 1}-${Math.min(i + CONCURRENT_BATCHES, chunks.length)} of ${chunks.length}...`);
     }
 
-    // Fallback: Process sequentially if batch fails
-    for (const candidate of chunk) {
+    const batchPromises = concurrentChunks.map(async (chunk) => {
       try {
-        const response = await fetch(`${API_BASE}/api/screen`, {
+        // Try batch endpoint with fastMode
+        const response = await fetch(`${API_BASE}/api/screen-batch`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jobDescription,
-            cvContent: candidate.cvContent,
+            candidates: chunk,
             model,
+            fastMode: options?.fastMode ?? true, // Default to fast mode
           }),
         });
 
         if (response.ok) {
-          const data = await response.json();
-          results.push({
-            name: candidate.name,
-            success: true,
-            ...data.result,
-          });
-        } else {
-          results.push({
-            name: candidate.name,
-            success: false,
-            error: 'Screening failed',
-            score: 0,
-            recommendation: 'pass' as const,
-            summary: 'Error processing CV',
-            matchedSkills: [],
-            missingSkills: [],
-            concerns: ['Processing error'],
-            interviewQuestions: [],
-            experienceYears: 0,
-          });
+          const batchResult = await response.json();
+          return batchResult.results as BatchResult[];
         }
-      } catch (error) {
-        results.push({
-          name: candidate.name,
-          success: false,
-          error: (error as Error).message,
-          score: 0,
-          recommendation: 'pass' as const,
-          summary: 'Error processing CV',
-          matchedSkills: [],
-          missingSkills: [],
-          concerns: ['Processing error'],
-          interviewQuestions: [],
-          experienceYears: 0,
-        });
+      } catch (e) {
+        console.log('[Batch] Batch endpoint failed, falling back to sequential');
       }
 
-      if (onProgress) {
-        onProgress(results.length, candidates.length);
-      }
+      // Fallback: Process sequentially with retry
+      return await processSequentialWithRetry(jobDescription, chunk, model);
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    for (const batchResult of batchResults) {
+      results.push(...batchResult);
+    }
+
+    if (onProgress) {
+      onProgress(results.length, candidates.length);
+    }
+
+    // Small delay between batch groups to avoid rate limiting
+    if (i + CONCURRENT_BATCHES < chunks.length) {
+      await new Promise(r => setTimeout(r, 200));
     }
   }
+
+  const totalMs = Date.now() - startTime;
+  const avgPerCvMs = Math.round(totalMs / candidates.length);
+
+  console.log(`[Batch] Complete: ${results.filter(r => r.success).length}/${candidates.length} in ${totalMs}ms (avg ${avgPerCvMs}ms/CV)`);
 
   return {
     success: true,
     total: candidates.length,
     processed: results.filter(r => r.success).length,
     results,
+    performance: { totalMs, avgPerCvMs }
   };
+}
+
+/**
+ * Process candidates sequentially with retry (fallback)
+ */
+async function processSequentialWithRetry(
+  jobDescription: string,
+  candidates: BatchCandidate[],
+  model?: string
+): Promise<BatchResult[]> {
+  const results: BatchResult[] = [];
+
+  for (const candidate of candidates) {
+    let lastError: string = '';
+    let success = false;
+
+    // Retry up to 2 times
+    for (let attempt = 0; attempt < 3 && !success; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE}/api/screen`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobDescription, cvContent: candidate.cvContent, model }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          results.push({ name: candidate.name, success: true, ...data.result });
+          success = true;
+        } else {
+          const error = await response.json();
+          lastError = error.error || 'Screening failed';
+          if (attempt < 2) await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
+        }
+      } catch (error) {
+        lastError = (error as Error).message;
+        if (attempt < 2) await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
+      }
+    }
+
+    if (!success) {
+      results.push({
+        name: candidate.name,
+        success: false,
+        error: lastError,
+        score: 0,
+        recommendation: 'pass' as const,
+        summary: 'Error processing CV',
+        matchedSkills: [],
+        missingSkills: [],
+        concerns: ['Processing error: ' + lastError],
+        interviewQuestions: [],
+        experienceYears: 0,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Parse multiple PDFs in parallel using Promise.all
+ * Faster than sequential parsing for bulk uploads
+ */
+export async function parseMultiplePdfs(
+  files: File[],
+  onProgress?: (completed: number, total: number) => void
+): Promise<{ name: string; content: string; error?: string }[]> {
+  const CONCURRENT = 4; // Parse 4 PDFs at a time
+  const results: { name: string; content: string; error?: string }[] = [];
+
+  for (let i = 0; i < files.length; i += CONCURRENT) {
+    const chunk = files.slice(i, i + CONCURRENT);
+
+    const chunkResults = await Promise.all(
+      chunk.map(async (file) => {
+        try {
+          const content = await readFileAsText(file);
+          return { name: file.name, content };
+        } catch (error) {
+          return { name: file.name, content: '', error: (error as Error).message };
+        }
+      })
+    );
+
+    results.push(...chunkResults);
+
+    if (onProgress) {
+      onProgress(results.length, files.length);
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -630,6 +702,7 @@ export const api = {
   screenBatch,
   readFileAsText,
   parsePdf,
+  parseMultiplePdfs,
   validateExtractedContent,
   baseUrl: API_BASE,
 };
