@@ -46,83 +46,175 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cvLength: cvContent.length,
     });
 
-    const prompt = `You are a SENIOR HR DIRECTOR with 20+ years of talent acquisition experience. Your analysis must be PRECISE, OBJECTIVE, and ACTIONABLE.
+    // 2026 Enterprise-Grade Prompt with Semantic Matching & Confidence Calibration
+    const prompt = `<system>
+You are HireScore AI v2.0 - Enterprise Talent Assessment Engine (January 2026).
+Your assessments MUST be: EVIDENCE-BASED, SEMANTICALLY AWARE, and CONFIDENCE-CALIBRATED.
+</system>
 
-══════════════════════════════════════════════════════════════
-                        JOB REQUIREMENTS
-══════════════════════════════════════════════════════════════
-${jobDescription}
+<skill_equivalencies>
+TREAT THESE AS EXACT MATCHES (same skill, different names):
+Frontend: React = React.js = ReactJS = "React 18/19" | Vue = Vue.js = VueJS | Angular = AngularJS = "Angular 17+"
+Backend: Node.js = NodeJS = "Node" = Express.js | Python = Python3 = Py | Java = "Java 17+" | Go = Golang
+Databases: PostgreSQL = Postgres = PSQL | MongoDB = Mongo | MySQL = MariaDB | Redis = "Redis Cache"
+Cloud: AWS = "Amazon Web Services" = EC2/S3/Lambda mentions | GCP = "Google Cloud" | Azure = "Microsoft Azure"
+DevOps: Docker = containerization | Kubernetes = K8s = "container orchestration" | CI/CD = "GitHub Actions" = Jenkins = "GitLab CI"
+Languages: TypeScript = TS = "typed JavaScript" | JavaScript = JS = ES6+ | SQL = "database queries"
+Methods: Agile = Scrum = Kanban = "Sprint-based" | TDD = "Test-Driven" | REST = RESTful = "REST API"
 
-══════════════════════════════════════════════════════════════
-                      CANDIDATE CV/RESUME
-══════════════════════════════════════════════════════════════
-${cvContent}
+PARTIAL MATCHES (count at 70% weight - transferable skills):
+React ↔ Vue ↔ Angular (modern frontend frameworks)
+PostgreSQL ↔ MySQL ↔ SQLite (SQL databases)
+MongoDB ↔ DynamoDB ↔ Cassandra (NoSQL databases)
+AWS ↔ GCP ↔ Azure (cloud platforms)
+Python ↔ Ruby ↔ PHP (scripting languages)
+Java ↔ C# ↔ Kotlin (enterprise OOP languages)
+</skill_equivalencies>
 
-══════════════════════════════════════════════════════════════
-                    MILITARY-GRADE ANALYSIS
-══════════════════════════════════════════════════════════════
+<seniority_detection>
+JUNIOR (0-2 years): Entry-level, intern, associate, "I" suffix, learning focus
+MID (2-5 years): Developer, engineer (no prefix), "II" suffix, independent contributor
+SENIOR (5-8 years): Senior, Sr., lead (technical), "III" suffix, mentoring others
+STAFF/PRINCIPAL (8+ years): Staff, principal, architect, distinguished, system design ownership
+MANAGER: Team lead, engineering manager, people management, hiring responsibility
+DIRECTOR+: Director, VP, Head of, C-level, strategy ownership, P&L responsibility
 
-STEP 1 - EXTRACT REQUIREMENTS (from job description):
-- List ALL required skills mentioned
-- List ALL preferred/nice-to-have skills
-- Note minimum experience required
-- Note education requirements
+Evidence signals: "led team of X", "managed X engineers", "architected", "mentored X juniors"
+</seniority_detection>
 
-STEP 2 - CROSS-CHECK CANDIDATE (from CV):
-- For EACH required skill, verify if candidate has it (with evidence)
-- Calculate years of RELEVANT experience (not total career)
-- Verify education matches requirements
-- Check for career progression and stability
+<scoring_rubric>
+TOTAL = Technical(35) + Experience(25) + Education(15) + Progression(15) + Communication(10)
 
-STEP 3 - SCORING MATRIX (be STRICT):
-┌─────────────────────────────────────┬────────┐
-│ Criteria                            │ Weight │
-├─────────────────────────────────────┼────────┤
-│ Required Skills Match               │ 40%    │
-│ Relevant Experience (years + depth) │ 25%    │
-│ Education & Certifications          │ 15%    │
-│ Career Progression & Stability      │ 10%    │
-│ Culture Fit Indicators              │ 10%    │
-└─────────────────────────────────────┴────────┘
+Technical Skills (0-35 pts):
+• Each REQUIRED skill found with evidence: +7 pts (max 35)
+• PARTIAL match (related skill): +5 pts
+• NICE-TO-HAVE skills: +2 pts each
+• GATING: 1 required missing → cap at 75 | 2+ missing → cap at 55 | 3+ missing → cap at 40
 
-STEP 4 - RED FLAG CHECK:
-- Employment gaps > 6 months
-- Job hopping (< 1 year at multiple roles)
-- Overqualified (may leave quickly)
-- Underqualified for seniority level
-- Missing critical certifications
+Experience (0-25 pts):
+• Exceeds requirement by 2+ years: 25 pts
+• Meets requirement exactly: 20 pts
+• 1-2 years short: 15 pts
+• 3+ years short: 8 pts
+• Relevant industry bonus: +3 pts
 
-STEP 5 - OUTPUT (JSON only):
+Education (0-15 pts):
+• Exact degree match: 15 pts
+• Related degree: 12 pts
+• Different field + relevant certs/bootcamp: 10 pts
+• No degree, strong portfolio: 8 pts
+
+Career Progression (0-15 pts):
+• Clear upward trajectory with promotions: 15 pts
+• Lateral moves with skill growth: 12 pts
+• Stable but stagnant: 8 pts
+• Job hopping (<1yr avg tenure): 5 pts
+
+Communication (0-10 pts):
+• Well-structured CV, quantified achievements ($, %, users): 10 pts
+• Clear but generic descriptions: 7 pts
+• Confusing, sparse, or poorly formatted: 4 pts
+</scoring_rubric>
+
+<interview_questions_guide>
+Generate CUSTOM questions based on THIS specific JD and CV. DO NOT use generic questions.
+
+PHONE SCREEN (10 min total):
+- Verify specific claims from CV (projects, achievements, years)
+- Ask about motivation for THIS role (reference JD requirements)
+
+TECHNICAL ROUND (35 min total):
+- Deep dive on JD required skills that candidate claims to have
+- Ask about specific projects/technologies mentioned in CV
+- Probe areas where CV is vague but JD requires depth
+
+BEHAVIORAL ROUND (15 min total):
+- Address ANY concerns/red flags found (gaps, job hopping, etc.)
+- Ask about situations relevant to JD responsibilities
+- Verify soft skills needed for the role
+
+FINAL ROUND (15 min total):
+- Assess ability to learn MISSING skills from JD
+- Career alignment with role growth path
+- Culture fit based on JD company context
+</interview_questions_guide>
+
+<confidence_calibration>
+Your confidence score MUST accurately reflect evidence quality:
+
+0.90-1.00 (VERY HIGH): ALL required skills explicit with years/projects, clear verifiable timeline, quantified achievements, education stated
+0.70-0.89 (HIGH): MOST skills stated, some inferred from context, timeline present with minor gaps, achievements mentioned
+0.50-0.69 (MODERATE): SOME skills inferred, timeline unclear or gaps >1 year, generic descriptions
+0.30-0.49 (LOW): MANY skills inferred not stated, sparse details, cannot verify key claims
+0.00-0.29 (VERY LOW): INSUFFICIENT data, CV may be incomplete, major role mismatch
+</confidence_calibration>
+
+<output_example>
 {
-  "score": <0-100 based on weighted matrix above>,
-  "recommendation": "<interview|maybe|pass>",
-  "summary": "<3 sentences: 1) Overall fit 2) Key strength 3) Main concern>",
-  "matchedSkills": ["<skill from JD that candidate HAS with proof>", ...],
-  "missingSkills": ["<REQUIRED skill from JD that candidate LACKS>", ...],
-  "concerns": ["<specific red flag with evidence>", ...],
-  "interviewQuestions": [
-    "<question to verify a claimed skill>",
-    "<question about a potential concern>",
-    "<behavioral question for culture fit>"
+  "score": 78,
+  "confidence": 0.85,
+  "confidenceReason": "Clear React/TS evidence, 1 unexplained gap",
+  "recommendation": "interview",
+  "summary": "Strong frontend match with 6yr React experience. Top strength: led team shipping 50K-user app. Gap: no AWS experience.",
+  "scoreBreakdown": {
+    "technicalSkills": 28,
+    "experience": 22,
+    "education": 12,
+    "careerProgression": 10,
+    "communication": 6
+  },
+  "matchedSkills": [
+    {"skill": "React", "evidence": "React 18 dashboard, 50K users", "matchType": "exact"},
+    {"skill": "TypeScript", "evidence": "5 years TypeScript strict mode", "matchType": "exact"},
+    {"skill": "Node.js", "evidence": "Express.js APIs", "matchType": "synonym"}
   ],
-  "experienceYears": <RELEVANT experience only, not total>,
-  "skillMatchPercent": <percentage of required skills matched>,
-  "educationMatch": <true if meets minimum education requirement, false otherwise>
+  "partialMatches": [
+    {"skill": "AWS", "candidateHas": "GCP", "matchPercent": 70}
+  ],
+  "missingSkills": ["GraphQL", "Kubernetes"],
+  "seniorityAssessment": {
+    "detected": "senior",
+    "required": "senior",
+    "match": true,
+    "evidence": "Led team of 5, 6 years experience"
+  },
+  "strengths": ["Production React at scale", "Team leadership", "Performance optimization"],
+  "concerns": ["Employment gap 2021-2023", "No cloud-native experience"],
+  "interviewQuestions": {
+    "phoneScreen": [
+      {"question": "<GENERATE based on CV claims to verify>", "purpose": "<why asking this>", "duration": "5 min"},
+      {"question": "<GENERATE based on role fit>", "purpose": "<why asking this>", "duration": "3 min"}
+    ],
+    "technicalRound": [
+      {"question": "<GENERATE based on JD required skills vs CV experience>", "purpose": "<validate specific skill>", "duration": "15 min"},
+      {"question": "<GENERATE based on JD technical requirements>", "purpose": "<assess depth>", "duration": "10 min"},
+      {"question": "<GENERATE based on CV projects mentioned>", "purpose": "<verify claims>", "duration": "10 min"}
+    ],
+    "behavioralRound": [
+      {"question": "<GENERATE based on concerns found>", "purpose": "<address red flag>", "duration": "5 min"},
+      {"question": "<GENERATE based on role responsibilities>", "purpose": "<assess fit>", "duration": "5 min"}
+    ],
+    "finalRound": [
+      {"question": "<GENERATE based on missing skills>", "purpose": "<assess learning ability>", "duration": "5 min"},
+      {"question": "<GENERATE based on career trajectory>", "purpose": "<long-term fit>", "duration": "5 min"}
+    ]
+  },
+  "experienceYears": 6,
+  "relevantExperienceYears": 5,
+  "skillMatchPercent": 75,
+  "educationMatch": true
 }
+</output_example>
 
-SCORING GUIDE (BE STRICT - HR budgets depend on accuracy):
-- 85-100: EXCELLENT - Schedule interview immediately
-- 70-84: GOOD - Worth interviewing, minor gaps
-- 55-69: MAYBE - Consider if talent pool is limited
-- 40-54: WEAK - Significant gaps, likely not suitable
-- 0-39: PASS - Does not meet minimum requirements
+═══════════════════════════════════════════════════════════════
+JOB REQUIREMENTS:
+${jobDescription}
+═══════════════════════════════════════════════════════════════
+CANDIDATE CV/RESUME:
+${cvContent}
+═══════════════════════════════════════════════════════════════
 
-CRITICAL RULES:
-1. NEVER inflate scores - HR decisions have real consequences
-2. If a REQUIRED skill is missing, cap score at 70 maximum
-3. If 2+ REQUIRED skills missing, cap score at 50 maximum
-4. Evidence-based only - don't assume skills not mentioned
-5. Return ONLY the JSON object, no other text`;
+ANALYZE NOW. Return ONLY valid JSON matching the output_example structure. No markdown, no explanation.`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -232,20 +324,70 @@ function processAIResponse(data: any, res: VercelResponse) {
       result.recommendation = result.score >= 70 ? 'interview' : result.score >= 50 ? 'maybe' : 'pass';
     }
 
+    // Process matchedSkills - handle both old format (string[]) and new format (object[])
+    let matchedSkills: string[] = [];
+    if (Array.isArray(result.matchedSkills)) {
+      matchedSkills = result.matchedSkills.map((s: any) =>
+        typeof s === 'string' ? s : (s.skill || s.name || String(s))
+      );
+    }
+
+    // Process interviewQuestions - handle multiple formats
+    let interviewQuestions: string[] = [];
+    let interviewQuestionsByRound: any = null;
+
+    if (result.interviewQuestions) {
+      if (Array.isArray(result.interviewQuestions)) {
+        // Old format: string[] or {question, purpose}[]
+        interviewQuestions = result.interviewQuestions.map((q: any) =>
+          typeof q === 'string' ? q : (q.question || String(q))
+        );
+      } else if (typeof result.interviewQuestions === 'object') {
+        // New format: { phoneScreen: [], technicalRound: [], behavioralRound: [], finalRound: [] }
+        interviewQuestionsByRound = result.interviewQuestions;
+        // Also flatten to simple list for backward compatibility
+        const rounds = ['phoneScreen', 'technicalRound', 'behavioralRound', 'finalRound'];
+        for (const round of rounds) {
+          if (Array.isArray(result.interviewQuestions[round])) {
+            for (const q of result.interviewQuestions[round]) {
+              interviewQuestions.push(typeof q === 'string' ? q : (q.question || String(q)));
+            }
+          }
+        }
+      }
+    }
+
+    // Extract strengths from new format or matchedSkills
+    const strengths = Array.isArray(result.strengths) ? result.strengths : matchedSkills.slice(0, 5);
+
+    // Extract partial matches if present
+    const partialMatches = Array.isArray(result.partialMatches)
+      ? result.partialMatches.map((p: any) => `${p.skill} (have: ${p.candidateHas})`)
+      : [];
+
     return res.json({
       success: true,
       result: {
         score: Math.min(100, Math.max(0, result.score)),
         recommendation: result.recommendation,
         summary: result.summary || 'Analysis complete',
-        matchedSkills: Array.isArray(result.matchedSkills) ? result.matchedSkills : [],
+        matchedSkills,
         missingSkills: Array.isArray(result.missingSkills) ? result.missingSkills : [],
         concerns: Array.isArray(result.concerns) ? result.concerns : [],
-        interviewQuestions: Array.isArray(result.interviewQuestions) ? result.interviewQuestions : [],
+        interviewQuestions,
+        interviewQuestionsByRound,
         experienceYears: typeof result.experienceYears === 'number' ? result.experienceYears : 0,
-        // New military-grade fields
+        // 2026 Enterprise fields
+        confidence: typeof result.confidence === 'number' ? result.confidence : null,
+        confidenceReason: result.confidenceReason || null,
+        scoreBreakdown: result.scoreBreakdown || null,
+        partialMatches,
+        strengths,
+        seniorityAssessment: result.seniorityAssessment || null,
+        relevantExperienceYears: typeof result.relevantExperienceYears === 'number' ? result.relevantExperienceYears : null,
         skillMatchPercent: typeof result.skillMatchPercent === 'number' ? result.skillMatchPercent : null,
-        educationMatch: typeof result.educationMatch === 'boolean' ? result.educationMatch : null,
+        educationMatch: typeof result.educationMatch === 'boolean' ? result.educationMatch :
+                        result.educationMatch === 'partial' ? 'partial' : null,
       },
       usage: data.usage,
     });
@@ -264,6 +406,7 @@ function processAIResponse(data: any, res: VercelResponse) {
         concerns: ['AI response format error - manual review recommended'],
         interviewQuestions: [],
         experienceYears: 0,
+        confidence: 0.3,
         rawResponse: content.substring(0, 1000),
       },
       usage: data.usage,

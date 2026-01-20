@@ -87,7 +87,17 @@ function DonutChart({ data, size = 160, strokeWidth = 24 }: DonutChartProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  let currentOffset = 0;
+  // Precompute offsets using reduce to avoid mutation
+  const segments = useMemo(() => {
+    const result: Array<typeof data[0] & { percentage: number; dashLength: number; dashOffset: number }> = [];
+    data.reduce((offset, segment) => {
+      const percentage = total > 0 ? segment.value / total : 0;
+      const dashLength = circumference * percentage;
+      result.push({ ...segment, percentage, dashLength, dashOffset: circumference * offset });
+      return offset + percentage;
+    }, 0);
+    return result;
+  }, [data, total, circumference]);
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -99,31 +109,24 @@ function DonutChart({ data, size = 160, strokeWidth = 24 }: DonutChartProps) {
         stroke={colors.graphite}
         strokeWidth={strokeWidth}
       />
-      {data.map((segment, i) => {
-        const percentage = total > 0 ? segment.value / total : 0;
-        const dashLength = circumference * percentage;
-        const dashOffset = circumference * currentOffset;
-        currentOffset += percentage;
-
-        return (
-          <motion.circle
-            key={i}
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={segment.color}
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${dashLength} ${circumference - dashLength}`}
-            strokeDashoffset={-dashOffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            initial={{ strokeDasharray: `0 ${circumference}` }}
-            animate={{ strokeDasharray: `${dashLength} ${circumference - dashLength}` }}
-            transition={{ duration: 1, delay: i * 0.1, ease: 'easeOut' }}
-          />
-        );
-      })}
+      {segments.map((segment, i) => (
+        <motion.circle
+          key={i}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={segment.color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${segment.dashLength} ${circumference - segment.dashLength}`}
+          strokeDashoffset={-segment.dashOffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          initial={{ strokeDasharray: `0 ${circumference}` }}
+          animate={{ strokeDasharray: `${segment.dashLength} ${circumference - segment.dashLength}` }}
+          transition={{ duration: 1, delay: i * 0.1, ease: 'easeOut' }}
+        />
+      ))}
       <text
         x={size / 2}
         y={size / 2 - 8}
@@ -274,7 +277,7 @@ export function ResultsScreen() {
   // ============================================
   // Data Processing
   // ============================================
-  const candidates = currentSession?.candidates || [];
+  const candidates = useMemo(() => currentSession?.candidates || [], [currentSession?.candidates]);
 
   const filteredCandidates = useMemo(() => {
     return candidates
@@ -333,7 +336,57 @@ export function ResultsScreen() {
     }
   };
 
-  const exportResults = () => {
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Export detailed JSON report
+  const exportDetailedReport = () => {
+    const report = {
+      meta: {
+        exportDate: new Date().toISOString(),
+        jobTitle: currentJob?.title || 'Unknown Position',
+        company: currentJob?.company || '',
+        totalCandidates: candidates.length,
+        recommendations: {
+          interview: stats.interview,
+          maybe: stats.maybe,
+          pass: stats.pass,
+        },
+        averageScore: stats.avgScore,
+      },
+      candidates: candidates.map((c) => ({
+        name: c.name,
+        score: c.score,
+        recommendation: c.recommendation,
+        experienceYears: c.experience || 0,
+        summary: c.summary,
+        scoreBreakdown: c.scoreBreakdown || null,
+        confidence: c.confidence || null,
+        matchedSkills: c.matchedSkills,
+        missingSkills: c.missingSkills,
+        partialMatches: c.partialMatches || [],
+        strengths: c.strengths || [],
+        concerns: c.concerns,
+        interviewQuestions: c.interviewQuestions,
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hirescore-report-${currentJob?.title || 'results'}-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    showToast('Detailed report downloaded', 'success');
+  };
+
+  // Export CSV for spreadsheet import
+  const exportCSV = () => {
     const csv = [
       ['Name', 'Score', 'Recommendation', 'Experience (yrs)', 'Summary', 'Matched Skills', 'Missing Skills', 'Concerns'],
       ...candidates.map((c) => [
@@ -354,6 +407,63 @@ export function ResultsScreen() {
     a.href = url;
     a.download = `hirescore-${currentJob?.title || 'results'}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+    showToast('CSV exported successfully', 'success');
+  };
+
+  // Modal action handlers
+  const handleViewCV = () => {
+    if (selectedCandidate?.rawText) {
+      // Open CV content in a new window/tab
+      const cvWindow = window.open('', '_blank');
+      if (cvWindow) {
+        // Escape HTML to prevent XSS
+        const escapeHtml = (text: string) => {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        };
+        cvWindow.document.write(`
+          <html>
+            <head>
+              <title>CV - ${escapeHtml(selectedCandidate.name)}</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; background: #0a0a0f; color: #e0e0e0; }
+                h1 { color: #00f0ff; border-bottom: 1px solid #333; padding-bottom: 10px; }
+                pre { white-space: pre-wrap; word-wrap: break-word; background: #1a1a24; padding: 20px; border-radius: 8px; }
+              </style>
+            </head>
+            <body>
+              <h1>${escapeHtml(selectedCandidate.name)}</h1>
+              <pre>${escapeHtml(selectedCandidate.rawText)}</pre>
+            </body>
+          </html>
+        `);
+        cvWindow.document.close();
+      }
+    } else {
+      showToast('CV content not available for this candidate', 'warning');
+    }
+  };
+
+  const handleSendEmail = () => {
+    if (selectedCandidate) {
+      // Open mailto link with pre-filled subject
+      const subject = encodeURIComponent(`Interview Invitation - ${currentJob?.title || 'Position'}`);
+      const body = encodeURIComponent(`Dear ${selectedCandidate.name},\n\nWe reviewed your application for the ${currentJob?.title || 'position'} role and would like to invite you for an interview.\n\nPlease let us know your availability.\n\nBest regards`);
+      window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
+      showToast('Email client opened', 'info');
+    }
+  };
+
+  const handleScheduleInterview = () => {
+    if (selectedCandidate) {
+      // Open Google Calendar with pre-filled event
+      const title = encodeURIComponent(`Interview: ${selectedCandidate.name} - ${currentJob?.title || 'Position'}`);
+      const details = encodeURIComponent(`Interview with ${selectedCandidate.name}\n\nScore: ${selectedCandidate.score}/100\nRecommendation: ${selectedCandidate.recommendation}\n\nKey Topics:\n${selectedCandidate.interviewQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join('\n')}`);
+      const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}`;
+      window.open(calendarUrl, '_blank');
+      showToast('Opening Google Calendar', 'info');
+    }
   };
 
   // ============================================
@@ -423,7 +533,7 @@ export function ResultsScreen() {
               variant="secondary"
               size="sm"
               icon={<FileText style={{ width: 16, height: 16 }} />}
-              onClick={exportResults}
+              onClick={exportDetailedReport}
             >
               Export Report
             </Button>
@@ -431,7 +541,7 @@ export function ResultsScreen() {
               variant="secondary"
               size="sm"
               icon={<Download style={{ width: 16, height: 16 }} />}
-              onClick={exportResults}
+              onClick={exportCSV}
             >
               Download CSV
             </Button>
@@ -811,23 +921,28 @@ export function ResultsScreen() {
                   </div>
 
                   {/* Key Strengths */}
-                  <div style={{ display: 'flex', gap: spacing[1], flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: spacing[1], flexWrap: 'nowrap', overflow: 'hidden' }}>
                     {candidate.matchedSkills.slice(0, 2).map((skill, j) => (
                       <span
                         key={j}
+                        title={skill}
                         style={{
                           padding: `2px ${spacing[2]}`,
                           borderRadius: radius.md,
                           fontSize: fontSizes.xs,
                           backgroundColor: 'rgba(0, 255, 136, 0.1)',
                           color: colors.emerald,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: '90px',
                         }}
                       >
-                        {skill}
+                        {skill.length > 12 ? skill.substring(0, 12) + '...' : skill}
                       </span>
                     ))}
                     {candidate.matchedSkills.length > 2 && (
-                      <span style={{ fontSize: fontSizes.xs, color: colors.silver }}>
+                      <span style={{ fontSize: fontSizes.xs, color: colors.silver, whiteSpace: 'nowrap' }}>
                         +{candidate.matchedSkills.length - 2}
                       </span>
                     )}
@@ -1232,13 +1347,13 @@ export function ResultsScreen() {
                       justifyContent: 'flex-end',
                       flexWrap: 'wrap',
                     }}>
-                      <Button variant="secondary" icon={<FileText style={{ width: 16, height: 16 }} />}>
+                      <Button variant="secondary" icon={<FileText style={{ width: 16, height: 16 }} />} onClick={handleViewCV}>
                         View Full CV
                       </Button>
-                      <Button variant="secondary" icon={<Mail style={{ width: 16, height: 16 }} />}>
+                      <Button variant="secondary" icon={<Mail style={{ width: 16, height: 16 }} />} onClick={handleSendEmail}>
                         Send Email
                       </Button>
-                      <Button icon={<Calendar style={{ width: 16, height: 16 }} />}>
+                      <Button icon={<Calendar style={{ width: 16, height: 16 }} />} onClick={handleScheduleInterview}>
                         Schedule Interview
                       </Button>
                     </div>
@@ -1246,6 +1361,35 @@ export function ResultsScreen() {
                 );
               })()}
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            style={{
+              position: 'fixed',
+              bottom: spacing[6],
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 100,
+              padding: `${spacing[3]} ${spacing[5]}`,
+              borderRadius: radius.lg,
+              backgroundColor: toast.type === 'success' ? 'rgba(0, 255, 136, 0.9)' :
+                               toast.type === 'warning' ? 'rgba(255, 170, 0, 0.9)' :
+                               'rgba(0, 240, 255, 0.9)',
+              color: colors.void,
+              fontSize: fontSizes.sm,
+              fontWeight: fontWeights.medium,
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            {toast.message}
           </motion.div>
         )}
       </AnimatePresence>

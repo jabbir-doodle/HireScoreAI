@@ -54,8 +54,9 @@ export interface ScreeningResult {
   concerns: string[];
   interviewQuestions: string[];
   experienceYears: number;
-  // Enterprise 2026 fields
+  // 2026 Enterprise fields
   confidence?: number;
+  confidenceReason?: string;
   scoreBreakdown?: {
     technicalSkills: number;
     experience: number;
@@ -65,7 +66,13 @@ export interface ScreeningResult {
   };
   partialMatches?: string[];
   strengths?: string[];
-  // Military-grade accuracy fields
+  seniorityAssessment?: {
+    detected: string;
+    required: string;
+    match: boolean | 'stretch';
+    evidence?: string;
+  };
+  relevantExperienceYears?: number;
   skillMatchPercent?: number;
   educationMatch?: boolean | 'partial';
   rawResponse?: string;
@@ -227,6 +234,7 @@ export async function screenCandidate(
 
 /**
  * Screen multiple candidates in batch
+ * Uses parallel processing for up to 10 CVs, or sequential for larger batches
  */
 export async function screenBatch(
   jobDescription: string,
@@ -234,31 +242,105 @@ export async function screenBatch(
   model?: string,
   onProgress?: (processed: number, total: number) => void
 ): Promise<BatchResponse> {
-  const response = await fetch(`${API_BASE}/api/screen/batch`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jobDescription,
-      candidates,
-      model,
-    }),
-  });
+  const BATCH_SIZE = 10; // Max parallel processing
+  const results: BatchResult[] = [];
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Batch screening failed');
+  // Process in chunks of BATCH_SIZE
+  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+    const chunk = candidates.slice(i, i + BATCH_SIZE);
+
+    try {
+      // Try batch endpoint first (more efficient)
+      const response = await fetch(`${API_BASE}/api/screen-batch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobDescription,
+          candidates: chunk,
+          model,
+        }),
+      });
+
+      if (response.ok) {
+        const batchResult = await response.json();
+        results.push(...batchResult.results);
+
+        if (onProgress) {
+          onProgress(results.length, candidates.length);
+        }
+        continue;
+      }
+    } catch (e) {
+      console.log('[Batch] Batch endpoint failed, falling back to sequential');
+    }
+
+    // Fallback: Process sequentially if batch fails
+    for (const candidate of chunk) {
+      try {
+        const response = await fetch(`${API_BASE}/api/screen`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jobDescription,
+            cvContent: candidate.cvContent,
+            model,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          results.push({
+            name: candidate.name,
+            success: true,
+            ...data.result,
+          });
+        } else {
+          results.push({
+            name: candidate.name,
+            success: false,
+            error: 'Screening failed',
+            score: 0,
+            recommendation: 'pass' as const,
+            summary: 'Error processing CV',
+            matchedSkills: [],
+            missingSkills: [],
+            concerns: ['Processing error'],
+            interviewQuestions: [],
+            experienceYears: 0,
+          });
+        }
+      } catch (error) {
+        results.push({
+          name: candidate.name,
+          success: false,
+          error: (error as Error).message,
+          score: 0,
+          recommendation: 'pass' as const,
+          summary: 'Error processing CV',
+          matchedSkills: [],
+          missingSkills: [],
+          concerns: ['Processing error'],
+          interviewQuestions: [],
+          experienceYears: 0,
+        });
+      }
+
+      if (onProgress) {
+        onProgress(results.length, candidates.length);
+      }
+    }
   }
 
-  const result = await response.json();
-
-  // Report progress
-  if (onProgress) {
-    onProgress(result.processed, result.total);
-  }
-
-  return result;
+  return {
+    success: true,
+    total: candidates.length,
+    processed: results.filter(r => r.success).length,
+    results,
+  };
 }
 
 /**
