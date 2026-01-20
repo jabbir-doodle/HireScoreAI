@@ -366,7 +366,7 @@ function processAIResponse(data: any, res: VercelResponse) {
     // ENFORCE GATING RULES - Don't trust AI to apply caps correctly
     const missingSkills = Array.isArray(result.missingSkills) ? result.missingSkills : [];
     const missingCount = missingSkills.length;
-    let rawScore = typeof result.score === 'number' ? result.score : 50;
+    const rawScore = typeof result.score === 'number' ? result.score : 50;
     let finalScore = rawScore;
     let gatingApplied = false;
 
