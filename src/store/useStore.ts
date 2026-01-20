@@ -30,7 +30,7 @@ const ENCRYPTION_KEY = 'HireScoreAI_2026_Secure';
 const defaultAIConfig: AIConfig = {
   provider: 'openrouter',
   apiKey: '',
-  model: 'z-ai/glm-4.7',
+  model: 'anthropic/claude-sonnet-4-5-20250514',
   encrypted: false,
 };
 

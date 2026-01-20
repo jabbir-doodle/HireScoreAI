@@ -24,7 +24,7 @@ const AI_PROVIDERS: { value: AIProvider; label: string; models: string[]; docsUr
   {
     value: 'anthropic',
     label: 'Anthropic (Claude)',
-    models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-sonnet-20241022'],
+    models: ['claude-sonnet-4-5-20250514', 'claude-opus-4-5-20250514', 'claude-3-5-sonnet-20241022'],
     docsUrl: 'https://console.anthropic.com/settings/keys'
   },
   {
@@ -35,8 +35,14 @@ const AI_PROVIDERS: { value: AIProvider; label: string; models: string[]; docsUr
   },
   {
     value: 'openrouter',
-    label: 'OpenRouter',
-    models: ['anthropic/claude-3-opus', 'openai/gpt-4-turbo', 'meta-llama/llama-3-70b'],
+    label: 'OpenRouter (Recommended)',
+    models: [
+      'anthropic/claude-sonnet-4-5-20250514',  // Default - Best for CV screening
+      'anthropic/claude-opus-4-5-20250514',
+      'openai/gpt-4o',
+      'google/gemini-2.0-flash-001',
+      'deepseek/deepseek-chat-v3-0324'
+    ],
     docsUrl: 'https://openrouter.ai/keys'
   },
   {
