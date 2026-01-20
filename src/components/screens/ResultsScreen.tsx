@@ -1107,57 +1107,104 @@ export function ResultsScreen() {
                     <div style={{ padding: spacing[6] }}>
                       {/* Score Breakdown */}
                       <div style={{ marginBottom: spacing[8] }}>
-                        <h3 style={{
-                          fontFamily: fonts.display,
-                          fontSize: fontSizes.lg,
-                          fontWeight: fontWeights.semibold,
-                          color: colors.snow,
-                          marginBottom: spacing[4],
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: spacing[2],
-                        }}>
-                          <BarChart3 style={{ width: 20, height: 20, color: colors.cyan }} />
-                          Score Breakdown
-                        </h3>
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                          gap: spacing[4],
-                        }}>
-                          {scoreBreakdown.map((category, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                padding: spacing[4],
-                                borderRadius: radius.lg,
-                                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.05)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2] }}>
-                                  <category.icon style={{ width: 16, height: 16, color: category.color }} />
-                                  <span style={{ fontSize: fontSizes.sm, color: colors.snow }}>{category.name}</span>
+                        {(() => {
+                          // Calculate raw score from breakdown
+                          const rawScore = scoreBreakdown.reduce((sum, cat) => sum + cat.score, 0);
+                          const finalScore = selectedCandidate.score;
+                          const hasGatingPenalty = rawScore > finalScore;
+                          const missingCount = selectedCandidate.missingSkills.length;
+
+                          return (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[4] }}>
+                                <h3 style={{
+                                  fontFamily: fonts.display,
+                                  fontSize: fontSizes.lg,
+                                  fontWeight: fontWeights.semibold,
+                                  color: colors.snow,
+                                  margin: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: spacing[2],
+                                }}>
+                                  <BarChart3 style={{ width: 20, height: 20, color: colors.cyan }} />
+                                  Score Breakdown
+                                </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: spacing[3] }}>
+                                  <span style={{ fontSize: fontSizes.sm, color: colors.silver }}>
+                                    Raw: <span style={{ fontWeight: fontWeights.semibold, color: colors.snow }}>{rawScore}/100</span>
+                                  </span>
+                                  {hasGatingPenalty && (
+                                    <>
+                                      <span style={{ color: colors.coral }}>→</span>
+                                      <span style={{ fontSize: fontSizes.sm, color: colors.silver }}>
+                                        Final: <span style={{ fontWeight: fontWeights.semibold, color: colors.coral }}>{finalScore}/100</span>
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
-                                <span style={{ fontSize: fontSizes.sm, fontWeight: fontWeights.semibold, color: category.color }}>
-                                  {category.score}/{category.maxScore}
-                                </span>
                               </div>
-                              <div style={{ height: '6px', backgroundColor: colors.graphite, borderRadius: radius.full, overflow: 'hidden' }}>
-                                <motion.div
-                                  style={{ height: '100%', backgroundColor: category.color, borderRadius: radius.full }}
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${category.percentage}%` }}
-                                  transition={{ duration: 0.8, delay: i * 0.1 }}
-                                />
+
+                              {hasGatingPenalty && (
+                                <div style={{
+                                  padding: spacing[3],
+                                  marginBottom: spacing[4],
+                                  borderRadius: radius.lg,
+                                  backgroundColor: 'rgba(255, 107, 107, 0.08)',
+                                  border: '1px solid rgba(255, 107, 107, 0.2)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: spacing[2],
+                                }}>
+                                  <AlertTriangle style={{ width: 16, height: 16, color: colors.coral, flexShrink: 0 }} />
+                                  <span style={{ fontSize: fontSizes.sm, color: colors.silver }}>
+                                    <strong style={{ color: colors.coral }}>Gating penalty applied:</strong> Score capped at {finalScore} due to {missingCount} missing required skill{missingCount !== 1 ? 's' : ''}.
+                                    {missingCount >= 3 ? ' (3+ missing → max 40)' : missingCount >= 2 ? ' (2+ missing → max 55)' : ' (1 missing → max 75)'}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                gap: spacing[4],
+                              }}>
+                                {scoreBreakdown.map((category, i) => (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      padding: spacing[4],
+                                      borderRadius: radius.lg,
+                                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2] }}>
+                                        <category.icon style={{ width: 16, height: 16, color: category.color }} />
+                                        <span style={{ fontSize: fontSizes.sm, color: colors.snow }}>{category.name}</span>
+                                      </div>
+                                      <span style={{ fontSize: fontSizes.sm, fontWeight: fontWeights.semibold, color: category.color }}>
+                                        {category.score}/{category.maxScore}
+                                      </span>
+                                    </div>
+                                    <div style={{ height: '6px', backgroundColor: colors.graphite, borderRadius: radius.full, overflow: 'hidden' }}>
+                                      <motion.div
+                                        style={{ height: '100%', backgroundColor: category.color, borderRadius: radius.full }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${category.percentage}%` }}
+                                        transition={{ duration: 0.8, delay: i * 0.1 }}
+                                      />
+                                    </div>
+                                    <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginTop: spacing[1] }}>
+                                      {category.percentage}% match
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginTop: spacing[1] }}>
-                                {category.percentage}% match
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Executive Summary */}
@@ -1189,7 +1236,7 @@ export function ResultsScreen() {
                         </p>
                       </div>
 
-                      {/* Pros & Cons Grid */}
+                      {/* Pros & Cons Grid - Enterprise Analysis */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: spacing[6], marginBottom: spacing[8] }}>
                         {/* Strengths (Pros) */}
                         <div style={{
@@ -1210,16 +1257,78 @@ export function ResultsScreen() {
                             <CheckCircle style={{ width: 18, height: 18 }} />
                             Strengths (Why Hire)
                           </h4>
-                          <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
-                            {selectedCandidate.matchedSkills.map((skill, i) => (
-                              <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
-                                {skill}
-                              </li>
-                            ))}
-                            {selectedCandidate.matchedSkills.length === 0 && (
-                              <li style={{ color: colors.silver, fontSize: fontSizes.sm }}>No specific strengths identified</li>
-                            )}
-                          </ul>
+
+                          {/* Key Strengths from AI */}
+                          {selectedCandidate.strengths && selectedCandidate.strengths.length > 0 && (
+                            <div style={{ marginBottom: spacing[4] }}>
+                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Key Achievements
+                              </div>
+                              <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
+                                {selectedCandidate.strengths.map((strength, i) => (
+                                  <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
+                                    {strength}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Matched Skills */}
+                          {selectedCandidate.matchedSkills.length > 0 && (
+                            <div style={{ marginBottom: spacing[3] }}>
+                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Exact Skill Matches ({selectedCandidate.matchedSkills.length})
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing[2] }}>
+                                {selectedCandidate.matchedSkills.map((skill, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      padding: `${spacing[1]} ${spacing[3]}`,
+                                      borderRadius: radius.full,
+                                      fontSize: fontSizes.xs,
+                                      backgroundColor: 'rgba(0, 255, 136, 0.15)',
+                                      color: colors.emerald,
+                                      border: '1px solid rgba(0, 255, 136, 0.3)',
+                                    }}
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Partial Matches */}
+                          {selectedCandidate.partialMatches && selectedCandidate.partialMatches.length > 0 && (
+                            <div>
+                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Transferable Skills (70% credit)
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing[2] }}>
+                                {selectedCandidate.partialMatches.map((match, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      padding: `${spacing[1]} ${spacing[3]}`,
+                                      borderRadius: radius.full,
+                                      fontSize: fontSizes.xs,
+                                      backgroundColor: 'rgba(255, 170, 0, 0.1)',
+                                      color: colors.amber,
+                                      border: '1px solid rgba(255, 170, 0, 0.3)',
+                                    }}
+                                  >
+                                    {match}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedCandidate.matchedSkills.length === 0 && (!selectedCandidate.strengths || selectedCandidate.strengths.length === 0) && (
+                            <p style={{ color: colors.silver, fontSize: fontSizes.sm, margin: 0 }}>No specific strengths identified</p>
+                          )}
                         </div>
 
                         {/* Gaps (Cons) */}
@@ -1239,23 +1348,63 @@ export function ResultsScreen() {
                             marginBottom: spacing[4],
                           }}>
                             <XCircle style={{ width: 18, height: 18 }} />
-                            Gaps (Concerns)
+                            Gaps & Concerns
                           </h4>
-                          <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
-                            {selectedCandidate.missingSkills.map((skill, i) => (
-                              <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
-                                {skill}
-                              </li>
-                            ))}
-                            {selectedCandidate.concerns.map((concern, i) => (
-                              <li key={`c-${i}`} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
-                                {concern}
-                              </li>
-                            ))}
-                            {selectedCandidate.missingSkills.length === 0 && selectedCandidate.concerns.length === 0 && (
-                              <li style={{ color: colors.silver, fontSize: fontSizes.sm }}>No significant gaps identified</li>
-                            )}
-                          </ul>
+
+                          {/* Missing Required Skills - Critical */}
+                          {selectedCandidate.missingSkills.length > 0 && (
+                            <div style={{ marginBottom: spacing[4] }}>
+                              <div style={{ fontSize: fontSizes.xs, color: colors.coral, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: spacing[1] }}>
+                                <AlertTriangle style={{ width: 12, height: 12 }} />
+                                Missing Required Skills ({selectedCandidate.missingSkills.length})
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing[2] }}>
+                                {selectedCandidate.missingSkills.map((skill, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      padding: `${spacing[1]} ${spacing[3]}`,
+                                      borderRadius: radius.full,
+                                      fontSize: fontSizes.xs,
+                                      backgroundColor: 'rgba(255, 107, 107, 0.15)',
+                                      color: colors.coral,
+                                      border: '1px solid rgba(255, 107, 107, 0.3)',
+                                    }}
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                              {selectedCandidate.missingSkills.length >= 2 && (
+                                <p style={{ fontSize: fontSizes.xs, color: colors.coral, marginTop: spacing[2], marginBottom: 0 }}>
+                                  This triggers a score cap due to gating rules
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Other Concerns */}
+                          {selectedCandidate.concerns.length > 0 && (
+                            <div>
+                              <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[2], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Red Flags / Areas of Concern
+                              </div>
+                              <ul style={{ margin: 0, paddingLeft: spacing[5] }}>
+                                {selectedCandidate.concerns.map((concern, i) => (
+                                  <li key={i} style={{ color: colors.snow, fontSize: fontSizes.sm, marginBottom: spacing[2], lineHeight: 1.5 }}>
+                                    {concern}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {selectedCandidate.missingSkills.length === 0 && selectedCandidate.concerns.length === 0 && (
+                            <p style={{ color: colors.emerald, fontSize: fontSizes.sm, margin: 0, display: 'flex', alignItems: 'center', gap: spacing[2] }}>
+                              <CheckCircle style={{ width: 14, height: 14 }} />
+                              No significant gaps identified - strong match!
+                            </p>
+                          )}
                         </div>
                       </div>
 
