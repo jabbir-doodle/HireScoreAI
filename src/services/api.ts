@@ -54,9 +54,20 @@ export interface ScreeningResult {
   concerns: string[];
   interviewQuestions: string[];
   experienceYears: number;
+  // Enterprise 2026 fields
+  confidence?: number;
+  scoreBreakdown?: {
+    technicalSkills: number;
+    experience: number;
+    education: number;
+    careerProgression: number;
+    communication: number;
+  };
+  partialMatches?: string[];
+  strengths?: string[];
   // Military-grade accuracy fields
-  skillMatchPercent?: number | null;
-  educationMatch?: boolean | null;
+  skillMatchPercent?: number;
+  educationMatch?: boolean | 'partial';
   rawResponse?: string;
 }
 

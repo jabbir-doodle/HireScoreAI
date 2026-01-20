@@ -20,7 +20,6 @@ import {
   Award,
   Briefcase,
   Brain,
-  Heart,
   Zap,
   FileText,
   Mail,
