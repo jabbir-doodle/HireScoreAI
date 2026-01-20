@@ -289,7 +289,41 @@ function parseExperienceYears(value: unknown): number {
   return 0;
 }
 
-function processAIResponse(data: any, res: VercelResponse) {
+// Type for OpenRouter API response
+interface OpenRouterResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+// Type for skill object from AI response
+interface SkillMatch {
+  skill?: string;
+  name?: string;
+  evidence?: string;
+  matchType?: string;
+}
+
+// Type for partial match from AI response
+interface PartialMatch {
+  skill?: string;
+  candidateHas?: string;
+  matchPercent?: number;
+}
+
+// Type for interview question from AI response
+interface InterviewQuestion {
+  question?: string;
+}
+
+function processAIResponse(data: OpenRouterResponse, res: VercelResponse) {
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
@@ -325,7 +359,8 @@ function processAIResponse(data: any, res: VercelResponse) {
     jsonStr = jsonStr
       .replace(/,\s*}/g, '}')  // Remove trailing commas before }
       .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars except \n\r\t
+      // eslint-disable-next-line no-control-regex
+      .replace(new RegExp('[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]', 'g'), '') // Remove control chars except \n\r\t
       .replace(/\r\n/g, '\n')  // Normalize line endings
       .replace(/\r/g, '\n');   // Normalize line endings
 
@@ -342,7 +377,7 @@ function processAIResponse(data: any, res: VercelResponse) {
     // Process matchedSkills - handle both old format (string[]) and new format (object[])
     let matchedSkills: string[] = [];
     if (Array.isArray(result.matchedSkills)) {
-      matchedSkills = result.matchedSkills.map((s: any) =>
+      matchedSkills = result.matchedSkills.map((s: string | SkillMatch) =>
         typeof s === 'string' ? s : (s.skill || s.name || String(s))
       );
     }
@@ -350,7 +385,7 @@ function processAIResponse(data: any, res: VercelResponse) {
     // Process interviewQuestions - simple string array
     let interviewQuestions: string[] = [];
     if (Array.isArray(result.interviewQuestions)) {
-      interviewQuestions = result.interviewQuestions.map((q: any) =>
+      interviewQuestions = result.interviewQuestions.map((q: string | InterviewQuestion) =>
         typeof q === 'string' ? q : (q.question || String(q))
       );
     }
@@ -360,7 +395,7 @@ function processAIResponse(data: any, res: VercelResponse) {
 
     // Extract partial matches if present
     const partialMatches = Array.isArray(result.partialMatches)
-      ? result.partialMatches.map((p: any) => `${p.skill} (have: ${p.candidateHas})`)
+      ? result.partialMatches.map((p: PartialMatch) => `${p.skill} (have: ${p.candidateHas})`)
       : [];
 
     // ENFORCE GATING RULES - Don't trust AI to apply caps correctly
