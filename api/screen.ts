@@ -117,26 +117,13 @@ Communication (0-10 pts):
 </scoring_rubric>
 
 <interview_questions_guide>
-Generate CUSTOM questions based on THIS specific JD and CV. DO NOT use generic questions.
+Generate 5 CUSTOM questions based on THIS JD and CV. Use these prefixes:
+- [PHONE] - Quick verification questions about CV claims
+- [TECH] - Technical deep-dive on JD required skills
+- [BEHAVIORAL] - Questions about concerns/red flags found
+- [FINAL] - Questions about growth and missing skills
 
-PHONE SCREEN (10 min total):
-- Verify specific claims from CV (projects, achievements, years)
-- Ask about motivation for THIS role (reference JD requirements)
-
-TECHNICAL ROUND (35 min total):
-- Deep dive on JD required skills that candidate claims to have
-- Ask about specific projects/technologies mentioned in CV
-- Probe areas where CV is vague but JD requires depth
-
-BEHAVIORAL ROUND (15 min total):
-- Address ANY concerns/red flags found (gaps, job hopping, etc.)
-- Ask about situations relevant to JD responsibilities
-- Verify soft skills needed for the role
-
-FINAL ROUND (15 min total):
-- Assess ability to learn MISSING skills from JD
-- Career alignment with role growth path
-- Culture fit based on JD company context
+IMPORTANT: Questions MUST be specific to this candidate, NOT generic!
 </interview_questions_guide>
 
 <confidence_calibration>
@@ -180,25 +167,13 @@ Your confidence score MUST accurately reflect evidence quality:
   },
   "strengths": ["Production React at scale", "Team leadership", "Performance optimization"],
   "concerns": ["Employment gap 2021-2023", "No cloud-native experience"],
-  "interviewQuestions": {
-    "phoneScreen": [
-      {"question": "<GENERATE based on CV claims to verify>", "purpose": "<why asking this>", "duration": "5 min"},
-      {"question": "<GENERATE based on role fit>", "purpose": "<why asking this>", "duration": "3 min"}
-    ],
-    "technicalRound": [
-      {"question": "<GENERATE based on JD required skills vs CV experience>", "purpose": "<validate specific skill>", "duration": "15 min"},
-      {"question": "<GENERATE based on JD technical requirements>", "purpose": "<assess depth>", "duration": "10 min"},
-      {"question": "<GENERATE based on CV projects mentioned>", "purpose": "<verify claims>", "duration": "10 min"}
-    ],
-    "behavioralRound": [
-      {"question": "<GENERATE based on concerns found>", "purpose": "<address red flag>", "duration": "5 min"},
-      {"question": "<GENERATE based on role responsibilities>", "purpose": "<assess fit>", "duration": "5 min"}
-    ],
-    "finalRound": [
-      {"question": "<GENERATE based on missing skills>", "purpose": "<assess learning ability>", "duration": "5 min"},
-      {"question": "<GENERATE based on career trajectory>", "purpose": "<long-term fit>", "duration": "5 min"}
-    ]
-  },
+  "interviewQuestions": [
+    "[PHONE] Verify: <question about specific CV claim>",
+    "[TECH] Skill check: <question about JD required skill>",
+    "[TECH] Deep dive: <question about CV project>",
+    "[BEHAVIORAL] Concern: <question about red flag found>",
+    "[FINAL] Growth: <question about missing skill learning>"
+  ],
   "experienceYears": 6,
   "relevantExperienceYears": 5,
   "skillMatchPercent": 75,
@@ -298,21 +273,34 @@ function processAIResponse(data: any, res: VercelResponse) {
 
   console.log('AI response length:', content.length);
 
-  // Parse JSON from response
+  // Parse JSON from response with robust error handling
   try {
     let jsonStr = content.trim();
 
-    // Remove markdown code blocks if present
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
+    // Remove markdown code blocks if present (various formats)
+    const codeBlockMatch = content.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
     }
 
-    // Try to find JSON object in the response
-    const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      jsonStr = objectMatch[0];
+    // Remove any leading text before the JSON object
+    const jsonStartIndex = jsonStr.indexOf('{');
+    if (jsonStartIndex > 0) {
+      jsonStr = jsonStr.substring(jsonStartIndex);
     }
+
+    // Remove any trailing text after the JSON object
+    const jsonEndIndex = jsonStr.lastIndexOf('}');
+    if (jsonEndIndex > 0 && jsonEndIndex < jsonStr.length - 1) {
+      jsonStr = jsonStr.substring(0, jsonEndIndex + 1);
+    }
+
+    // Clean up common issues
+    jsonStr = jsonStr
+      .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+      .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+      .replace(/[\x00-\x1F\x7F]/g, ' ') // Remove control characters
+      .replace(/\n\s*\n/g, '\n'); // Remove empty lines
 
     const result = JSON.parse(jsonStr);
 
@@ -332,29 +320,12 @@ function processAIResponse(data: any, res: VercelResponse) {
       );
     }
 
-    // Process interviewQuestions - handle multiple formats
+    // Process interviewQuestions - simple string array
     let interviewQuestions: string[] = [];
-    let interviewQuestionsByRound: any = null;
-
-    if (result.interviewQuestions) {
-      if (Array.isArray(result.interviewQuestions)) {
-        // Old format: string[] or {question, purpose}[]
-        interviewQuestions = result.interviewQuestions.map((q: any) =>
-          typeof q === 'string' ? q : (q.question || String(q))
-        );
-      } else if (typeof result.interviewQuestions === 'object') {
-        // New format: { phoneScreen: [], technicalRound: [], behavioralRound: [], finalRound: [] }
-        interviewQuestionsByRound = result.interviewQuestions;
-        // Also flatten to simple list for backward compatibility
-        const rounds = ['phoneScreen', 'technicalRound', 'behavioralRound', 'finalRound'];
-        for (const round of rounds) {
-          if (Array.isArray(result.interviewQuestions[round])) {
-            for (const q of result.interviewQuestions[round]) {
-              interviewQuestions.push(typeof q === 'string' ? q : (q.question || String(q)));
-            }
-          }
-        }
-      }
+    if (Array.isArray(result.interviewQuestions)) {
+      interviewQuestions = result.interviewQuestions.map((q: any) =>
+        typeof q === 'string' ? q : (q.question || String(q))
+      );
     }
 
     // Extract strengths from new format or matchedSkills
@@ -375,7 +346,6 @@ function processAIResponse(data: any, res: VercelResponse) {
         missingSkills: Array.isArray(result.missingSkills) ? result.missingSkills : [],
         concerns: Array.isArray(result.concerns) ? result.concerns : [],
         interviewQuestions,
-        interviewQuestionsByRound,
         experienceYears: typeof result.experienceYears === 'number' ? result.experienceYears : 0,
         // 2026 Enterprise fields
         confidence: typeof result.confidence === 'number' ? result.confidence : null,
