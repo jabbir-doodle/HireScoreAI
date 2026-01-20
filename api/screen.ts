@@ -263,6 +263,32 @@ ANALYZE NOW. Return ONLY valid JSON matching the output_example structure. No ma
   }
 }
 
+// Generic number parser - handles number or string, returns null if invalid
+function parseNumberField(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number' && !isNaN(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+// Robust experience years parsing - handles number, string, or missing values
+function parseExperienceYears(value: unknown): number {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string') {
+    // Handle "10 years", "10+", "10-15", or just "10"
+    const match = value.match(/(\d+)/);
+    if (match) {
+      return Math.max(0, parseInt(match[1], 10));
+    }
+  }
+  return 0;
+}
+
 function processAIResponse(data: any, res: VercelResponse) {
   const content = data.choices?.[0]?.message?.content;
 
@@ -337,26 +363,56 @@ function processAIResponse(data: any, res: VercelResponse) {
       ? result.partialMatches.map((p: any) => `${p.skill} (have: ${p.candidateHas})`)
       : [];
 
+    // ENFORCE GATING RULES - Don't trust AI to apply caps correctly
+    const missingSkills = Array.isArray(result.missingSkills) ? result.missingSkills : [];
+    const missingCount = missingSkills.length;
+    let rawScore = typeof result.score === 'number' ? result.score : 50;
+    let finalScore = rawScore;
+    let gatingApplied = false;
+
+    // Apply gating caps based on missing required skills
+    if (missingCount >= 3 && rawScore > 40) {
+      finalScore = 40;
+      gatingApplied = true;
+    } else if (missingCount >= 2 && rawScore > 55) {
+      finalScore = 55;
+      gatingApplied = true;
+    } else if (missingCount >= 1 && rawScore > 75) {
+      finalScore = 75;
+      gatingApplied = true;
+    }
+
+    // Adjust recommendation based on gated score
+    let recommendation = result.recommendation;
+    if (!['interview', 'maybe', 'pass'].includes(recommendation)) {
+      recommendation = finalScore >= 70 ? 'interview' : finalScore >= 50 ? 'maybe' : 'pass';
+    } else if (gatingApplied) {
+      // Re-evaluate recommendation if gating changed the score significantly
+      recommendation = finalScore >= 70 ? 'interview' : finalScore >= 50 ? 'maybe' : 'pass';
+    }
+
+    console.log(`[Gating] Raw: ${rawScore}, Missing: ${missingCount}, Final: ${finalScore}, Applied: ${gatingApplied}`);
+
     return res.json({
       success: true,
       result: {
-        score: Math.min(100, Math.max(0, result.score)),
-        recommendation: result.recommendation,
+        score: Math.min(100, Math.max(0, finalScore)),
+        recommendation,
         summary: result.summary || 'Analysis complete',
         matchedSkills,
         missingSkills: Array.isArray(result.missingSkills) ? result.missingSkills : [],
         concerns: Array.isArray(result.concerns) ? result.concerns : [],
         interviewQuestions,
-        experienceYears: typeof result.experienceYears === 'number' ? result.experienceYears : 0,
+        experienceYears: parseExperienceYears(result.experienceYears),
         // 2026 Enterprise fields
-        confidence: typeof result.confidence === 'number' ? result.confidence : null,
+        confidence: parseNumberField(result.confidence),
         confidenceReason: result.confidenceReason || null,
         scoreBreakdown: result.scoreBreakdown || null,
         partialMatches,
         strengths,
         seniorityAssessment: result.seniorityAssessment || null,
-        relevantExperienceYears: typeof result.relevantExperienceYears === 'number' ? result.relevantExperienceYears : null,
-        skillMatchPercent: typeof result.skillMatchPercent === 'number' ? result.skillMatchPercent : null,
+        relevantExperienceYears: result.relevantExperienceYears ? parseExperienceYears(result.relevantExperienceYears) : null,
+        skillMatchPercent: parseNumberField(result.skillMatchPercent),
         educationMatch: typeof result.educationMatch === 'boolean' ? result.educationMatch :
                         result.educationMatch === 'partial' ? 'partial' : null,
       },
