@@ -24,8 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { jobDescription, cvContent, model } = req.body;
 
-    // Default to GLM 4.7 (cheapest) - user can select premium models if needed
-    const selectedModel = model || 'z-ai/glm-4.7';
+    // Default to Claude Sonnet 4.5 via OpenRouter - best quality for CV screening
+    const selectedModel = model || 'anthropic/claude-sonnet-4-5-20250514';
 
     if (!jobDescription || !cvContent) {
       return res.status(400).json({
