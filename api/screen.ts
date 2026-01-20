@@ -295,20 +295,13 @@ function processAIResponse(data: any, res: VercelResponse) {
       jsonStr = jsonStr.substring(0, jsonEndIndex + 1);
     }
 
-    // Clean up common JSON issues (2026 robust parsing)
+    // Clean up common JSON issues (simple and reliable)
     jsonStr = jsonStr
       .replace(/,\s*}/g, '}')  // Remove trailing commas before }
       .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
-      .replace(/[\x00-\x1F\x7F]/g, ' ') // Remove control characters
-      .replace(/\n\s*\n/g, '\n') // Remove empty lines
-      // Fix unescaped newlines inside strings (common AI issue)
-      .replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-      })
-      // Fix single quotes used instead of double quotes for keys
-      .replace(/(\{|\,)\s*'([^']+)'\s*:/g, '$1"$2":')
-      // Fix unquoted string values for known fields
-      .replace(/"recommendation"\s*:\s*(interview|maybe|pass)(?=[,\}])/gi, '"recommendation":"$1"');
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars except \n\r\t
+      .replace(/\r\n/g, '\n')  // Normalize line endings
+      .replace(/\r/g, '\n');   // Normalize line endings
 
     const result = JSON.parse(jsonStr);
 
