@@ -47,12 +47,45 @@ export function ScreeningScreen() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
 
+  // Adaptive timing - track actual processing time for accurate estimates
+  const [actualProcessingTimes, setActualProcessingTimes] = useState<number[]>([]);
+
   // Model selection state
   const [models, setModels] = useState<AIModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('z-ai/glm-4.7');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+
+  // Get estimated seconds per CV based on model tier
+  const getModelEstimate = useCallback((model: string): number => {
+    const modelLower = model.toLowerCase();
+    // Fast models (~10-15 sec)
+    if (modelLower.includes('flash') || modelLower.includes('mini') || modelLower.includes('haiku') || modelLower.includes('glm')) {
+      return 15;
+    }
+    // Medium models (~20-30 sec)
+    if (modelLower.includes('sonnet') || modelLower.includes('4o') || modelLower.includes('gemini-pro') || modelLower.includes('deepseek')) {
+      return 25;
+    }
+    // Large/slow models (~35-50 sec) - GPT-5, Claude Opus, o1, o3
+    if (modelLower.includes('gpt-5') || modelLower.includes('opus') || modelLower.includes('o1') || modelLower.includes('o3') || modelLower.includes('pro')) {
+      return 45;
+    }
+    // Default for unknown models
+    return 30;
+  }, []);
+
+  // Calculate adaptive estimate (uses actual time if we have data)
+  const estimatedSecondsPerCV = useMemo(() => {
+    if (actualProcessingTimes.length > 0) {
+      // Use average of actual processing times
+      const avg = actualProcessingTimes.reduce((a, b) => a + b, 0) / actualProcessingTimes.length;
+      return Math.ceil(avg);
+    }
+    // Fall back to model-based estimate
+    return getModelEstimate(selectedModel);
+  }, [actualProcessingTimes, selectedModel, getModelEstimate]);
 
   // Real-time elapsed time counter
   useEffect(() => {
@@ -234,6 +267,7 @@ Keep it simple and easy to read. No technical jargon.`;
 
     setError(null);
     setCompletedCount(0);
+    setActualProcessingTimes([]); // Reset adaptive timing for new session
     setStageStartTime(Date.now());
     updateSession({ status: 'processing' });
 
@@ -243,6 +277,10 @@ Keep it simple and easy to read. No technical jargon.`;
       for (let i = 0; i < uploadedCVs.length; i++) {
         const file = uploadedCVs[i];
         setCurrentIndex(i);
+
+        // Track start time for this CV (for adaptive timing)
+        const cvProcessingStart = Date.now();
+
         updateSession({
           progress: Math.round((i / uploadedCVs.length) * 100),
           currentCandidate: file.name
@@ -349,6 +387,11 @@ Keep it simple and easy to read. No technical jargon.`;
           };
 
           candidates.push(candidate);
+
+          // Track actual processing time for adaptive estimates
+          const actualTime = Math.round((Date.now() - cvProcessingStart) / 1000);
+          setActualProcessingTimes(prev => [...prev, actualTime]);
+
           setCompletedCount(prev => prev + 1);
           setProcessingStage('complete');
         } catch (err) {
@@ -662,7 +705,7 @@ Keep it simple and easy to read. No technical jargon.`;
                   textAlign: 'left',
                 }}>
                   <div style={{ fontSize: fontSizes.xs, color: colors.silver, marginBottom: spacing[1] }}>Est. Time</div>
-                  <div style={{ fontSize: fontSizes.xl, fontWeight: fontWeights.bold, color: colors.snow }}>~{Math.ceil(uploadedCVs.length * 5)}s</div>
+                  <div style={{ fontSize: fontSizes.xl, fontWeight: fontWeights.bold, color: colors.snow }}>~{Math.ceil(uploadedCVs.length * estimatedSecondsPerCV)}s</div>
                 </div>
               </div>
 
@@ -875,9 +918,9 @@ Keep it simple and easy to read. No technical jargon.`;
                 </div>
                 <div style={statBoxStyle}>
                   <div style={{ fontSize: fontSizes['2xl'], fontWeight: fontWeights.bold, color: colors.cyan, fontFamily: fonts.display }}>
-                    ~{Math.max(1, Math.ceil((uploadedCVs.length - completedCount) * 4))}s
+                    ~{Math.max(1, Math.ceil((uploadedCVs.length - completedCount) * estimatedSecondsPerCV))}s
                   </div>
-                  <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Est. Time</div>
+                  <div style={{ fontSize: fontSizes.xs, color: colors.silver }}>Est. Remaining</div>
                 </div>
               </div>
             </motion.div>
