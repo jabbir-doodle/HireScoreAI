@@ -286,11 +286,12 @@ Keep it simple and easy to read. No technical jargon.`;
           currentCandidate: file.name
         });
 
+        let cvContent = '';
         try {
           // STAGE 1: Reading document
           setProcessingStage('reading');
           setStageStartTime(Date.now());
-          const cvContent = await readFileAsText(file);
+          cvContent = await readFileAsText(file);
 
           // STAGE 2: Validating content
           setProcessingStage('validating');
@@ -395,21 +396,37 @@ Keep it simple and easy to read. No technical jargon.`;
           setCompletedCount(prev => prev + 1);
           setProcessingStage('complete');
         } catch (err) {
-          // If one file fails, continue with others
-          console.error(`Failed to process ${file.name}:`, err);
+          // Enterprise error handling: log, continue, mark failed
+          const errorMsg = (err as Error).message;
+          console.error(`[Screening] Failed ${file.name}:`, errorMsg);
           setCompletedCount(prev => prev + 1);
+
+          // Determine error type for user-friendly message
+          let userMessage = 'Processing failed';
+          let retryable = true;
+          if (errorMsg.includes('parsing failed') || errorMsg.includes('PARSE_ERROR')) {
+            userMessage = 'AI returned invalid response - try different model';
+          } else if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
+            userMessage = 'Rate limited - wait and retry';
+          } else if (errorMsg.includes('timeout')) {
+            userMessage = 'Request timed out - try again';
+          } else if (errorMsg.includes('API key') || errorMsg.includes('401')) {
+            userMessage = 'API authentication error';
+            retryable = false;
+          }
+
           candidates.push({
             id: generateId(),
             name: file.name.replace(/\.(pdf|doc|docx|txt)$/i, '').replace(/[-_]/g, ' '),
             fileName: file.name,
-            rawText: '',
+            rawText: cvContent || '',
             score: 0,
             confidence: 0,
             recommendation: 'pass',
-            summary: `⚠️ PROCESSING ERROR - ${(err as Error).message}`,
+            summary: `❌ ${userMessage}. ${retryable ? 'Re-upload this CV to retry.' : 'Contact support.'}`,
             matchedSkills: [],
             missingSkills: [],
-            concerns: ['Processing failed - ' + (err as Error).message],
+            concerns: [`Error: ${errorMsg}`],
             interviewQuestions: [],
             experience: 0,
             processedAt: new Date()

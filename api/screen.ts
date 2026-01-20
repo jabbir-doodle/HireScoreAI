@@ -364,22 +364,48 @@ function processAIResponse(data: any, res: VercelResponse) {
   } catch (parseError) {
     console.error('JSON parse error:', parseError, 'Content:', content.substring(0, 500));
 
-    // Return with raw response for debugging
-    return res.json({
-      success: true,
-      result: {
-        score: 50,
-        recommendation: 'maybe',
-        summary: 'Could not fully parse AI analysis. Raw response included.',
-        matchedSkills: [],
-        missingSkills: [],
-        concerns: ['AI response format error - manual review recommended'],
-        interviewQuestions: [],
-        experienceYears: 0,
-        confidence: 0.3,
-        rawResponse: content.substring(0, 1000),
-      },
-      usage: data.usage,
+    // Enterprise: Try to extract partial data before failing
+    try {
+      // Attempt to extract at least a score from the response
+      const scoreMatch = content.match(/"score"\s*:\s*(\d+)/);
+      const recMatch = content.match(/"recommendation"\s*:\s*"(interview|maybe|pass)"/);
+      const summaryMatch = content.match(/"summary"\s*:\s*"([^"]+)"/);
+
+      if (scoreMatch) {
+        const fallbackScore = parseInt(scoreMatch[1], 10);
+        const fallbackRec = recMatch?.[1] as 'interview' | 'maybe' | 'pass' ||
+          (fallbackScore >= 70 ? 'interview' : fallbackScore >= 50 ? 'maybe' : 'pass');
+
+        console.log('Recovered partial data: score=' + fallbackScore);
+
+        return res.json({
+          success: true,
+          result: {
+            score: Math.min(100, Math.max(0, fallbackScore)),
+            recommendation: fallbackRec,
+            summary: summaryMatch?.[1] || 'Analysis completed with partial data extraction.',
+            matchedSkills: [],
+            missingSkills: [],
+            concerns: ['Note: Some analysis details could not be extracted'],
+            interviewQuestions: [],
+            experienceYears: 0,
+            confidence: 0.5,
+            confidenceReason: 'Partial data extraction due to response format issue',
+          },
+          usage: data.usage,
+          warning: 'Partial data extracted - some fields may be missing',
+        });
+      }
+    } catch (recoveryError) {
+      console.error('Recovery also failed:', recoveryError);
+    }
+
+    // Complete failure - return error
+    return res.status(422).json({
+      success: false,
+      error: 'AI response parsing failed',
+      errorCode: 'PARSE_ERROR',
+      message: 'The AI returned an invalid response format. Try a different model.',
     });
   }
 }
